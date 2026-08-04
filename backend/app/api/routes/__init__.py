@@ -14,6 +14,7 @@ from app.api.routes import (
     auth,
     gateways,
     pastos,
+    push,
     resumo,
     simulacao,
     telemetria,
@@ -31,6 +32,7 @@ protegido = [Depends(usuario_atual)]
 api_router.include_router(resumo.router, dependencies=protegido)
 api_router.include_router(animais.router, dependencies=protegido)
 api_router.include_router(alertas.router, dependencies=protegido)
+api_router.include_router(push.router, dependencies=protegido)
 
 # Criar e apagar pasto muda a geocerca de todo o rebanho -- exige operador.
 api_router.include_router(pastos.router, dependencies=[Depends(exige_papel(PAPEL_OPERADOR))])

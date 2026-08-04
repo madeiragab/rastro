@@ -59,5 +59,29 @@ services:
       - ./frontend/public:/app/public
       - ./frontend/index.html:/app/index.html
 
+  # HTTPS local. Não sobe por padrão -- `docker compose --profile tls up`.
+  #
+  # Serve para abrir no celular pela rede: http://<ip-local> não é contexto
+  # seguro, e sem contexto seguro não há Service Worker nem push.
+  proxy:
+    image: caddy:2-alpine
+    container_name: rastro-proxy
+    profiles: ["tls"]
+    environment:
+      # IP da máquina na rede local, para o certificado cobrir o endereço que
+      # o celular usa. Ex.: TLS_HOST=192.168.0.12
+      TLS_HOST: ${TLS_HOST:-127.0.0.1}
+    depends_on:
+      - api
+      - web
+    ports:
+      - "443:443"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - rastro_caddy_data:/data
+      - rastro_caddy_config:/config
+
 volumes:
   rastro_pgdata:
+  rastro_caddy_data:
+  rastro_caddy_config:

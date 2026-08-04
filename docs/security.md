@@ -192,10 +192,11 @@ An honest list. Each item is a conscious MVP trade-off, not an oversight.
 
 | Gap | Risk | Fix before production |
 |---|---|---|
-| **No HTTPS in compose** | Everything in clear text on the wire | Terminate TLS at a reverse proxy (Caddy, nginx) |
+| **HTTPS optional** | The `tls` profile exists and uses a local-authority certificate; by default compose serves HTTP | Real domain with Let's Encrypt and `COOKIE_SECURE=true` |
 | **No second factor** | A leaked password means full access | TOTP at least for the `owner` role |
-| **No password recovery** | Forget it and the account is gone | Email flow with a single-use token |
-| **No general rate limit** | Only login is limited; the rest of the API is not | Per-IP limit at the edge |
+| **No SMTP** | Password recovery works, but the link goes to the API log instead of an inbox | Plug a provider into `services/notificacao.py` |
+| **No general rate limit** | Only login and password recovery are limited; the rest of the API is not | Per-IP limit at the edge |
+| **Push has no delivery confirmation** | The vendor service accepts a message and may still not deliver it; the system cannot tell | Reconciliation, or a secondary channel for critical alerts |
 | **Weak password blocklist** | ~30 entries, illustrative | HIBP top 100k, or a breached-password API with k-anonymity |
 | **No audit retention policy** | Grows without bound; no export path | Define retention and an external destination |
 | **Secrets in environment variables** | Visible in `docker inspect` and shell history | A secrets manager (Vault, SSM, Secret Manager) |

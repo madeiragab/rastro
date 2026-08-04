@@ -15,7 +15,7 @@ from app.config import settings
 from app.database import SessionLocal, engine, init_db
 from app.middleware import CabecalhosDeSeguranca
 from app.seed import semear
-from app.services import manutencao, simulador
+from app.services import manutencao, push, simulador
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 log = logging.getLogger("rastro")
@@ -50,7 +50,12 @@ async def lifespan(app: FastAPI):
     finally:
         db.close()
 
-    tarefas = [asyncio.create_task(manutencao.loop())]
+    tarefas = [
+        asyncio.create_task(manutencao.loop()),
+        # Push sai num laco proprio: o envio vai por HTTP para um servico de
+        # terceiro, e o gateway nao pode esperar isso para confirmar uma posicao.
+        asyncio.create_task(push.loop()),
+    ]
     if settings.simulator_enabled:
         tarefas.append(asyncio.create_task(simulador.loop()))
 

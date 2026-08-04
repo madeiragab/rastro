@@ -226,3 +226,67 @@ momento possível.
 **Consequência:** sem granularidade, sem relógio, sem janela. Custa uma coluna
 `integer` e uma comparação. Quem encontrou o problema foi a suíte de testes, na
 primeira execução real — não a revisão de código, que leu o `<` e achou correto.
+
+---
+
+## ADR-014 — Push despachado por laço de fundo, não no caminho da requisição
+
+**Situação:** quando um alerta abre, é preciso mandar push para os aparelhos
+inscritos.
+
+**Decisão:** um laço separado varre alertas com `notificado_em` nulo e envia. A
+telemetria não espera pelo push.
+
+**Motivo:** push sai por HTTP para o serviço do fabricante do navegador —
+terceiro, fora do nosso controle, que pode estar lento ou fora do ar. Fazer isso
+dentro do `POST /api/telemetria` significaria o gateway esperando o Google para
+ter uma posição confirmada. Um enlace LoRa com janela de transmissão curta não
+tem esse tempo.
+
+**Por que a marca fica no alerta e não numa fila em memória:** reinicialização.
+Fila em memória perde o que estava pendente; uma coluna no banco sobrevive, e a
+mesma coluna impede o reenvio.
+
+**Detalhe que só aparece rodando:** alerta sem nenhuma inscrição também é
+marcado como notificado. Sem isso, ficariam represados e a primeira pessoa a
+ativar notificações receberia o histórico inteiro de uma vez.
+
+**Consequência:** latência de até um ciclo (5 s) entre o alerta abrir e o push
+sair. Irrelevante para um alerta cujo limiar de campo é de horas.
+
+---
+
+## ADR-015 — VAPID no banco, não em variável de ambiente
+
+**Situação:** o Web Push exige um par de chaves estável por instalação.
+
+**Decisão:** gerar na primeira necessidade e guardar no banco.
+
+**Alternativa descartada:** variável de ambiente. É o lugar natural para
+segredo, mas aqui tem um problema específico: se a variável não estiver
+definida, a aplicação precisa escolher entre não subir ou gerar uma chave nova a
+cada reinicialização. A segunda opção invalida todas as inscrições existentes — e
+**os aparelhos não são avisados disso**. Simplesmente param de receber alerta.
+
+**Consequência:** num sistema de alerta, falha silenciosa é a pior categoria de
+falha. A chave no banco sobrevive a reinicialização sem exigir configuração, e o
+custo é uma tabela de uma linha.
+
+---
+
+## ADR-016 — TLS como perfil opcional, não padrão
+
+**Situação:** Service Worker e push só funcionam em contexto seguro. Mas
+`http://localhost` **é** contexto seguro por especificação.
+
+**Decisão:** manter HTTP como padrão e oferecer TLS num perfil do compose
+(`--profile tls`), com Caddy e certificado de autoridade local.
+
+**Motivo:** ligar TLS por padrão traria aviso de certificado a todo mundo que
+apenas quer rodar o projeto em `localhost` — onde push já funciona sem ele. O
+TLS resolve um caso específico: abrir no celular pela rede, onde
+`http://192.168.x.x` não é contexto seguro.
+
+**Consequência:** dois caminhos documentados em vez de um. Em troca, quem só
+quer ver o projeto rodando não tropeça num aviso de segurança do navegador logo
+na primeira tela.

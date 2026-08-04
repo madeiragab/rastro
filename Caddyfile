@@ -1,0 +1,44 @@
+# TLS para desenvolvimento e para abrir no celular pela rede local.
+#
+# Por que existe: `http://localhost` é contexto seguro por especificação, então
+# Service Worker e push funcionam ali sem certificado. `http://192.168.x.x` NÃO
+# é — e é justamente o endereço usado para abrir no celular. Sem TLS, a promessa
+# central do produto não pode nem ser demonstrada no aparelho.
+#
+# `tls internal` faz o Caddy emitir certificado com uma autoridade local. O
+# navegador vai avisar até que essa autoridade seja confiada no aparelho.
+# Para produção, troque por um domínio real e o Caddy resolve o Let's Encrypt
+# sozinho.
+
+{
+	# Sem redirecionar HTTP para HTTPS: o acesso por localhost continua
+	# valendo, e quebrar o fluxo que já funciona seria um péssimo negócio.
+	auto_https disable_redirects
+	admin off
+}
+
+https://localhost, https://{$TLS_HOST:127.0.0.1} {
+	tls internal
+
+	# A API precisa vir antes: o roteamento é por especificidade, e o bloco
+	# genérico abaixo capturaria /api também.
+	handle /api/* {
+		reverse_proxy api:8000
+	}
+
+	handle /health {
+		reverse_proxy api:8000
+	}
+
+	handle {
+		reverse_proxy web:5173
+	}
+
+	encode gzip
+
+	header {
+		# HSTS só aqui, onde de fato há TLS.
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+}

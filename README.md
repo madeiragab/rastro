@@ -107,6 +107,8 @@ of what is **not** covered.
 | Headers | Locked-down CSP, `nosniff`, `DENY` framing, `no-referrer`, COOP/CORP, `no-store`, HSTS under HTTPS |
 | Configuration | The app **refuses to boot** in production with a weak secret, insecure cookies, non-local `http://` CORS, or the simulator on |
 | Authorisation | Declared at the router, so a new route is protected by default; three roles enforced server-side |
+| Team | Initial password generated server-side and shown once; demoting or deactivating invalidates the token immediately; nobody edits their own account |
+| Password recovery | Single-use opaque token, 30 min, 3 requests per hour; resetting revokes sessions and all other pending links |
 
 ---
 
@@ -202,6 +204,11 @@ the only public endpoints.
 | `POST` | `/api/auth/logout` | cookie | Revoke the session family |
 | `GET` | `/api/auth/eu` | user | Current user |
 | `POST` | `/api/auth/senha` | user | Change password (ends every session) |
+| `POST` | `/api/auth/esqueci` | — | Request a reset link (same response whether or not the account exists) |
+| `POST` | `/api/auth/redefinir` | token | Consume the link and store the new password |
+| `GET` `POST` `PATCH` | `/api/usuarios` | owner | Manage the team and their roles |
+| `GET` | `/api/push/chave-publica` | user | VAPID key for the browser to subscribe |
+| `POST` `DELETE` | `/api/push/inscricoes` | user | Register or cancel this device |
 | `GET` | `/api/fazenda` | user | Current farm |
 | `GET` | `/api/resumo` | user | Dashboard counters |
 | `GET` | `/api/animais` | user | Animals with last position and status |
@@ -237,22 +244,52 @@ identification mandatory for all cattle movement from 2033.
 
 ---
 
+## Push notifications
+
+Alerts reach the phone **with the app closed** — the product's core promise.
+Enable it under **Conta → Notificações**.
+
+Web Push with VAPID. The key pair is generated on first need and stored in the
+database rather than in an environment variable: rotating the key would
+invalidate every existing subscription, and devices would only find out by
+silently not receiving alerts — the worst failure mode for an alerting system.
+
+Sending runs in a background loop, not on the telemetry request path: push goes
+out over HTTP to the browser vendor's service, and a gateway cannot wait on that
+to have a position acknowledged. The `notificado_em` mark lives on the alert
+itself, so restarting mid-flight neither loses nor duplicates a notification.
+
+**Browser constraint:** Service Workers only register in a secure context —
+HTTPS **or** `localhost`. On a phone over the LAN, `http://192.168.x.x` does not
+qualify. Hence the TLS profile below.
+
+## Local HTTPS
+
+```bash
+TLS_HOST=192.168.0.12 docker compose --profile tls up
+```
+
+Brings up Caddy on `https://localhost` (and on the given IP) with a certificate
+from a local authority. Browsers will warn until that authority is trusted on the
+device. It does not start by default and does not redirect HTTP — access over
+`localhost` keeps working exactly as before.
+
+For production, point it at a real domain and Caddy handles Let's Encrypt on its
+own. Set `COOKIE_SECURE=true` alongside.
+
 ## Before production
 
-- **TLS.** The compose file serves plain HTTP. Terminate TLS at a reverse proxy and
-  set `COOKIE_SECURE=true`.
 - **Second factor.** Not implemented. TOTP at least for the `owner` role.
-- **Password recovery.** Not implemented — forget it and the account is gone.
-- **Migrations.** Schema is created via `create_all`, so **any model change
-  requires `docker compose down -v`** — otherwise the API starts and every query
-  hits a missing column. This already bit once. Move to Alembic before the first
-  pilot with real data.
-- **Push notifications.** Alerts only show inside the panel today. Push to the
-  phone is the product's core promise and is the main reason a native React Native
-  app is on the roadmap.
+- **SMTP.** Password recovery works, but the link is written to the API log
+  instead of emailed. A provider needs plugging into
+  `services/notificacao.py` — the abstraction is already isolated there.
 - **Multi-farm.** The MVP assumes a single farm.
 - **Secrets management.** Secrets come from environment variables, visible in
   `docker inspect`. Move to a secrets manager.
+- **General rate limiting.** Only login and password recovery are limited; the
+  rest of the API is not.
+- **Push on iOS.** Full support on Android/Chrome. Safari requires the app added
+  to the home screen — the main argument for React Native on the roadmap.
 
 The full list, with risk and remedy for each item, is in
 [docs/security.md](docs/security.md#what-is-not-protected).

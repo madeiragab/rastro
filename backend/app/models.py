@@ -135,6 +135,12 @@ class Alerta(Base):
     criado_em: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=agora, index=True)
     resolvido_em: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # Marca do envio de push. Fica no alerta, e nao numa fila em memoria, para
+    # que uma reinicializacao no meio do caminho nao perca nem duplique aviso.
+    notificado_em: Mapped[dt.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+
     animal: Mapped[Animal] = relationship()
 
 
@@ -246,6 +252,51 @@ class ChaveGateway(Base):
     revogada_em: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     fazenda: Mapped[Fazenda] = relationship()
+
+
+class InscricaoPush(Base):
+    """Endpoint de push de um navegador.
+
+    O navegador entrega um `endpoint` (URL no servico de push do fabricante) e
+    duas chaves usadas para cifrar a mensagem. O servidor nao consegue ler o
+    conteudo de volta nem enderecar o aparelho por outro caminho.
+
+    Uma pessoa tem uma inscricao por navegador e por aparelho, dai o endpoint
+    ser a chave de unicidade em vez do usuario.
+    """
+
+    __tablename__ = "inscricoes_push"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    usuario_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id", ondelete="CASCADE"), index=True)
+
+    endpoint: Mapped[str] = mapped_column(Text, unique=True)
+    chave_p256dh: Mapped[str] = mapped_column(String(255))
+    chave_auth: Mapped[str] = mapped_column(String(255))
+    user_agent: Mapped[str] = mapped_column(String(255), default="")
+
+    criada_em: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=agora)
+    ultimo_envio: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    falhas: Mapped[int] = mapped_column(Integer, default=0)
+
+    usuario: Mapped[Usuario] = relationship()
+
+
+class ConfiguracaoPush(Base):
+    """Par de chaves VAPID da instalacao, com uma linha so.
+
+    Fica no banco, e nao em variavel de ambiente, porque precisa sobreviver a
+    reinicializacao: trocar a chave invalida todas as inscricoes existentes, e
+    os aparelhos so descobririam isso deixando de receber aviso -- falha
+    silenciosa, que e o pior tipo num sistema de alerta.
+    """
+
+    __tablename__ = "configuracao_push"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    chave_privada_pem: Mapped[str] = mapped_column(Text)
+    chave_publica_app: Mapped[str] = mapped_column(Text)
+    criada_em: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=agora)
 
 
 class TokenResetSenha(Base):
