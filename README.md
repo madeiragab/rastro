@@ -9,7 +9,13 @@ The rancher draws the pasture boundary on a map and gets alerted when an animal
 
 Mobile-first web app with a built-in herd simulator — runs with no hardware at all.
 
-> **Status: MVP / demo.** Not production-ready. See [Before production](#before-production).
+> **Status: MVP / demo.** The design follows current good practice, but it has
+> not been externally audited and **has not yet been run end to end**. See
+> [Before production](#before-production).
+
+📚 **[Full documentation](docs/README.md)** — [requirements](docs/requirements.md) ·
+[architecture](docs/architecture.md) · [security](docs/security.md) ·
+[decision log](docs/decisions.md)
 
 ---
 
@@ -23,11 +29,16 @@ docker compose up --build
 |---|---|
 | App | http://localhost:5173 |
 | API docs (Swagger) | http://localhost:8000/docs |
-| Database | localhost:5432 |
+| Database | 127.0.0.1:5432 |
 
 First boot creates the schema, enables PostGIS and loads demo data: one farm in
 Uberaba (Minas Gerais, Brazil), two pastures and 14 animals. The simulator starts
 producing telemetry right away.
+
+**The initial credentials are printed to the API log, once.** Look for the
+`ACESSO INICIAL` block in `docker compose logs api`. It contains the login email,
+a randomly generated password, and a gateway API key. Nothing is hardcoded —
+committed default credentials are how most exposed systems fall.
 
 Reset everything:
 
@@ -35,9 +46,9 @@ Reset everything:
 docker compose down -v
 ```
 
-> **Windows note.** Docker Desktop needs the WSL2 backend. If `docker info` reports
-> `no virtualization available`, WSL is missing — run `wsl --install` in an
-> Administrator PowerShell, reboot, then start Docker Desktop again.
+> **Windows note.** Docker Desktop needs the WSL2 backend. If `docker info`
+> reports `no virtualization available`, WSL is missing — run `wsl --install` in
+> an Administrator PowerShell, reboot, then start Docker Desktop again.
 
 ### Open it on your phone
 
@@ -49,7 +60,7 @@ machine's LAN IP and browse to `http://<your-ip>:5173`. On Android/Chrome you ca
 
 ## How to demo it
 
-The **Simulate** tab forces a scenario on the selected animal. Pick an animal from
+The **Simular** tab forces a scenario on the selected animal. Pick an animal from
 the list or tap it on the map, then:
 
 | Button | What happens |
@@ -59,8 +70,7 @@ the list or tap it on the map, then:
 | **Perder sinal** (Lose signal) | The tag stops reporting. After 60 s of silence, the signal-loss alert fires. |
 | **Pastando** (Grazing) | Back to normal; open alerts resolve on their own. |
 
-To draw a new pasture: tap the **⬡** button, tap the vertices on the map, name it
-and save.
+To draw a new pasture: tap **⬡**, tap the vertices on the map, name it and save.
 
 ---
 
@@ -70,10 +80,31 @@ Mobile-first: the map fills the screen and everything else floats above it.
 
 - **Bottom sheet** with three snap points — drag it, or tap the handle. Collapsed,
   it still shows a compact strip of counters.
-- **Tabs**: Rebanho (herd), Alertas (alerts, with an unread badge), Simular (simulate).
+- **Tabs**: Rebanho (herd), Alertas (alerts, with a badge), Simular, Conta (account).
 - Tapping an animal flies the map to it — but the map never moves on its own when a
-  new position arrives. A map that jumps around on every reading is unusable on a phone.
-- At ≥900 px wide the sheet becomes a fixed side panel, so the same code works on desktop.
+  new position arrives. A map that jumps on every reading is unusable on a phone.
+- At ≥900 px wide the sheet becomes a fixed side panel, so the same code works on
+  desktop.
+
+---
+
+## Security
+
+Full write-up in [docs/security.md](docs/security.md), including an honest list
+of what is **not** covered.
+
+| Area | Approach |
+|---|---|
+| Passwords | Argon2id (64 MiB, t=3), NFKC-normalised, automatic rehash on cost change. NIST SP 800-63B policy: length + blocklist, no composition rules |
+| Sessions | 15-min access JWT held **in memory only** + 14-day opaque refresh token in an `HttpOnly`, `SameSite=strict` cookie |
+| Token theft | Refresh rotation with reuse detection — a replayed token revokes the whole session family (OAuth 2.0 Security BCP) |
+| CSRF | `SameSite=strict` plus double-submit token compared in constant time |
+| Brute force | Database-backed lockout, per account **and** per IP (the latter catches password spraying) |
+| Enumeration | Generic error message, constant-time path for unknown emails, lockout applies to them too |
+| Devices | Per-gateway API key, Argon2id-hashed, shown once, revocable, scoped to its own farm |
+| Headers | Locked-down CSP, `nosniff`, `DENY` framing, `no-referrer`, COOP/CORP, `no-store`, HSTS under HTTPS |
+| Configuration | The app **refuses to boot** in production with a weak secret, insecure cookies, non-local `http://` CORS, or the simulator on |
+| Authorisation | Declared at the router, so a new route is protected by default; three roles enforced server-side |
 
 ---
 
@@ -90,45 +121,46 @@ PostgreSQL + PostGIS
 ```
 rastro/
 ├── docker-compose.yml
+├── docs/                       # requirements, architecture, security, ADRs (PT + EN)
 ├── backend/
 │   └── app/
-│       ├── main.py            # bootstrap, CORS, lifespan, simulator task
-│       ├── config.py          # EVERY alert threshold lives here
-│       ├── database.py        # engine, session, schema creation
-│       ├── models.py          # Fazenda, Pasto, Animal, Posicao, Alerta
-│       ├── schemas.py         # request/response contracts
-│       ├── seed.py            # demo data
+│       ├── main.py             # bootstrap, CORS, security headers, lifespan
+│       ├── config.py           # EVERY threshold and security parameter
+│       ├── database.py         # engine, session, schema creation
+│       ├── models.py           # domain + users, sessions, keys, audit
+│       ├── schemas.py          # request/response contracts and input ranges
+│       ├── middleware.py       # security response headers
+│       ├── seed.py             # demo data + initial credentials
+│       ├── security/
+│       │   ├── senhas.py       # Argon2id + password policy
+│       │   ├── tokens.py       # access JWT, refresh, CSRF
+│       │   ├── chaves.py       # gateway API keys
+│       │   ├── limites.py      # brute-force lockout
+│       │   └── auditoria.py    # audit trail
 │       ├── api/
-│       │   ├── serializers.py # ORM -> schema (extracts lat/lon from geometry)
-│       │   └── routes/        # one module per resource
+│       │   ├── deps.py         # authn/authz dependencies
+│       │   ├── serializers.py  # ORM -> schema (extracts lat/lon from geometry)
+│       │   └── routes/         # one module per resource
 │       └── services/
-│           ├── geofence.py    # point-in-polygon and distance (PostGIS)
-│           ├── alertas.py     # the three alert rules
-│           ├── telemetria.py  # position ingestion (single entry point)
-│           └── simulador.py   # virtual herd
+│           ├── geofence.py     # point-in-polygon and distance (PostGIS)
+│           ├── alertas.py      # the three alert rules
+│           ├── telemetria.py   # position ingestion (single entry point)
+│           ├── simulador.py    # virtual herd
+│           └── manutencao.py   # periodic cleanup
 └── frontend/
     └── src/
-        ├── App.tsx            # state and polling
-        ├── api.ts             # HTTP client  ← reusable by React Native
-        ├── types.ts           # mirrors the backend schemas  ← reusable
+        ├── App.tsx             # state, polling, session gate
+        ├── api.ts              # HTTP client  ← reusable by React Native
+        ├── types.ts            # mirrors the backend schemas  ← reusable
         └── components/
-            ├── MapaView.tsx
-            ├── FolhaInferior.tsx   # bottom sheet, hand-rolled
-            ├── TirasResumo.tsx
-            ├── ListaAnimais.tsx
-            ├── FeedAlertas.tsx
-            └── PainelSimulacao.tsx
 ```
 
 ### Why PostGIS
 
 Point-in-polygon runs in the database (`ST_Contains`), not in Python. The database
 already has a spatial index, and distances in metres come out correct by casting to
-`geography` — no projection error. As the herd grows, this is the decision that avoids
-rewriting the data layer later.
-
-`api.ts` and `types.ts` are framework-agnostic on purpose: the planned React Native
-app reuses them as-is.
+`geography` — no projection error. As the herd grows, this is the decision that
+avoids rewriting the data layer later.
 
 ---
 
@@ -138,16 +170,16 @@ Each one carries its false-alarm mitigation. A rancher who gets a false alert
 uninstalls the app — that is the product's main adoption risk, not the technology.
 
 **1. Out of area.** A 25 m tolerance zone around the polygon, plus 2 consecutive
-readings outside. Without it, GNSS error produces a constant false alarm whenever an
-animal grazes near the fence.
+readings outside. Without it, GNSS error produces a constant false alarm whenever
+an animal grazes near the fence.
 
 **2. No movement.** Decided by the accelerometer, not by GNSS standing still. GNSS
 alone lies: cattle lying down and ruminating stay static for hours under perfectly
 normal conditions. This is the highest commercial-value alert — it detects death,
 obstructed calving, animals stuck in mud, and fractures.
 
-**3. Signal loss.** Threshold relative to each device's own reporting cadence, not a
-fixed global value, because cadence varies by animal and by terrain. Covers three
+**3. Signal loss.** Threshold relative to each device's own reporting cadence, not
+a fixed global value, because cadence varies by animal and by terrain. Covers three
 distinct causes: tag ripped off (theft), dead battery, and dead-zone terrain.
 
 All thresholds live in [`backend/app/config.py`](backend/app/config.py), **compressed
@@ -158,56 +190,68 @@ for demo purposes**. The realistic field values are documented next to each one
 
 ## API
 
-| Method | Path | Purpose |
-|---|---|---|
-| `GET` | `/api/fazenda` | Current farm (MVP is single-tenant) |
-| `GET` | `/api/resumo` | Dashboard counters |
-| `GET` | `/api/pastos` | List pastures with area and animal count |
-| `POST` | `/api/pastos` | Create a pasture from drawn vertices |
-| `DELETE` | `/api/pastos/{id}` | Remove a pasture (refuses if animals are attached) |
-| `GET` | `/api/animais` | List animals with last position and status |
-| `GET` | `/api/animais/{id}` | Single animal |
-| `GET` | `/api/animais/{id}/trilha` | Recent position trail |
-| `GET` | `/api/alertas` | Alerts, open by default |
-| `POST` | `/api/alertas/{id}/resolver` | Resolve one alert |
-| `POST` | `/api/alertas/animal/{id}/resolver` | Resolve every open alert for an animal |
-| `POST` | `/api/telemetria` | **Position ingestion — the hardware entry point** |
-| `POST` | `/api/simulacao/cenario` | Force a scenario (demo only) |
-| `POST` | `/api/simulacao/reiniciar` | Reset the simulation (demo only) |
+Everything under `/api` requires authentication. `/health` and the login flow are
+the only public endpoints.
 
-Full interactive reference at http://localhost:8000/docs.
+| Method | Path | Auth | Purpose |
+|---|---|---|---|
+| `POST` | `/api/auth/login` | — | Log in; sets the refresh and CSRF cookies |
+| `POST` | `/api/auth/refresh` | cookie + CSRF | Rotate the session, get a new access token |
+| `POST` | `/api/auth/logout` | cookie | Revoke the session family |
+| `GET` | `/api/auth/eu` | user | Current user |
+| `POST` | `/api/auth/senha` | user | Change password (ends every session) |
+| `GET` | `/api/fazenda` | user | Current farm |
+| `GET` | `/api/resumo` | user | Dashboard counters |
+| `GET` | `/api/animais` | user | Animals with last position and status |
+| `GET` | `/api/animais/{id}/trilha` | user | Recent position trail |
+| `GET` | `/api/alertas` | user | Alerts, open by default |
+| `POST` | `/api/alertas/{id}/resolver` | user | Resolve one alert |
+| `GET` `POST` `DELETE` | `/api/pastos` | operator | Manage pastures |
+| `GET` `POST` `DELETE` | `/api/gateways` | owner | Manage gateway keys |
+| `POST` | `/api/telemetria` | **gateway key** | Position ingestion — the hardware entry point |
+| `POST` | `/api/simulacao/*` | operator | Force scenarios (demo only) |
+
+Interactive reference at http://localhost:8000/docs — disabled in production.
 
 ---
 
 ## Plugging in real hardware
 
-The simulator and a real gateway go through the same path. The gateway just calls:
+The simulator and a real gateway go through the same service. The gateway
+authenticates with its own key:
 
 ```bash
 curl -X POST http://localhost:8000/api/telemetria \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: rastro_gw_<prefix>_<secret>" \
   -d '{"brinco":"076000000000001","lat":-19.7480,"lon":-47.9320,"atividade":0.6,"bateria_pct":88}'
 ```
 
 No business rule changes. Turn the simulator off with `SIMULATOR_ENABLED=false`.
 
 Tag IDs use 15 digits with the `076` prefix (Brazil's country code), aligned with
-**PNIB** — the Brazilian national cattle identification programme, which makes
-individual identification mandatory for all cattle movement from 2033.
+**PNIB** — the national cattle identification programme, which makes individual
+identification mandatory for all cattle movement from 2033.
 
 ---
 
 ## Before production
 
-- **Authentication.** The API is wide open, including the telemetry endpoint, which
-  accepts a position from any source. Needs a per-gateway key or mTLS, plus login on
-  the panel. This is blocking for anything beyond a local demo.
-- **Migrations.** Schema is created via `create_all`. Move to Alembic once it settles.
-- **Real-time.** The client polls every 3 s. Move to WebSocket/SSE when volume justifies it.
-- **Push notifications.** Alerts only show inside the panel today. Push to the phone is
-  the product's core promise and is not built yet — it is also the main reason a native
-  React Native app is on the roadmap.
-- **Multi-farm.** The MVP assumes a single farm (`GET /api/fazenda` returns the first one).
+- **TLS.** The compose file serves plain HTTP. Terminate TLS at a reverse proxy and
+  set `COOKIE_SECURE=true`.
+- **Second factor.** Not implemented. TOTP at least for the `owner` role.
+- **Password recovery.** Not implemented — forget it and the account is gone.
+- **Migrations.** Schema is created via `create_all`; a schema change means
+  recreating the database. Move to Alembic before the first pilot with real data.
+- **Push notifications.** Alerts only show inside the panel today. Push to the
+  phone is the product's core promise and is the main reason a native React Native
+  app is on the roadmap.
+- **Multi-farm.** The MVP assumes a single farm.
+- **Secrets management.** Secrets come from environment variables, visible in
+  `docker inspect`. Move to a secrets manager.
+
+The full list, with risk and remedy for each item, is in
+[docs/security.md](docs/security.md#what-is-not-protected).
 
 ---
 
@@ -217,10 +261,10 @@ The stack choice came out of a feasibility study on cattle tracking for small
 landholders in Minas Gerais. Three findings drove the design:
 
 1. **A GPS implant is not viable** — physics, not cost. Tissue attenuates RF, the
-   antenna does not fit, and a satellite uplink's energy cannot be stored safely under
-   the skin. Ear tags win on every axis.
-2. **LoRa does not depend on a carrier.** It runs on the free 915 MHz ISM band with the
-   rancher's own gateway. "No LoRa coverage" means "no gateway installed".
+   antenna does not fit, and a satellite uplink's energy cannot be stored safely
+   under the skin. Ear tags win on every axis.
+2. **LoRa does not depend on a carrier.** It runs on the free 915 MHz ISM band with
+   the rancher's own gateway. "No LoRa coverage" means "no gateway installed".
 3. **Direct-to-satellite works today but is expensive** (~R$ 1,600/head). It becomes
    competitive with NB-IoT NTN around 2027.
 
@@ -246,4 +290,4 @@ Requires a PostgreSQL instance with PostGIS. Adjust `DATABASE_URL`.
 ## Stack
 
 React 18 · TypeScript · Vite · Leaflet · FastAPI · SQLAlchemy 2.0 · GeoAlchemy2 ·
-PostgreSQL 16 · PostGIS 3.4 · Docker Compose
+Argon2id · PyJWT · PostgreSQL 16 · PostGIS 3.4 · Docker Compose

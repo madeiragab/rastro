@@ -1,19 +1,25 @@
 import type { Map as MapaLeaflet } from "leaflet";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { api } from "./api";
+import { api, definirToken, ErroApi, registrarPerdaDeSessao } from "./api";
 import { FeedAlertas } from "./components/FeedAlertas";
 import { FolhaInferior, type Posicao as PosicaoFolha } from "./components/FolhaInferior";
 import { ListaAnimais } from "./components/ListaAnimais";
 import { MapaView } from "./components/MapaView";
+import { PainelConta } from "./components/PainelConta";
 import { PainelSimulacao } from "./components/PainelSimulacao";
+import { TelaLogin } from "./components/TelaLogin";
 import { TirasResumo } from "./components/TirasResumo";
-import type { Alerta, Animal, Comportamento, Fazenda, Pasto, Posicao, Resumo } from "./types";
+import type { Alerta, Animal, Comportamento, Fazenda, Pasto, Posicao, Resumo, Usuario } from "./types";
+import { podeEditar } from "./types";
 
 const INTERVALO_POLL_MS = 3000;
 
-type Aba = "rebanho" | "alertas" | "simular";
+type Aba = "rebanho" | "alertas" | "simular" | "conta";
 
 export default function App() {
+  const [usuario, setUsuario] = useState<Usuario | null>(null);
+  const [verificandoSessao, setVerificandoSessao] = useState(true);
+
   const [fazenda, setFazenda] = useState<Fazenda | null>(null);
   const [resumo, setResumo] = useState<Resumo | null>(null);
   const [pastos, setPastos] = useState<Pasto[]>([]);
@@ -36,6 +42,34 @@ export default function App() {
   const selecionadoRef = useRef<number | null>(null);
   selecionadoRef.current = selecionadoId;
 
+  const editor = podeEditar(usuario?.papel);
+
+  // ---------------------------------------------------------------- sessão
+  useEffect(() => {
+    // O access token só vive em memória, então uma carga de página começa sem
+    // ele. O cookie de refresh (HttpOnly) é quem restaura a sessão aqui.
+    registrarPerdaDeSessao(() => {
+      setUsuario(null);
+      definirToken(null);
+    });
+
+    api
+      .restaurarSessao()
+      .then(setUsuario)
+      .catch(() => setUsuario(null))
+      .finally(() => setVerificandoSessao(false));
+  }, []);
+
+  async function sair() {
+    await api.logout().catch(() => undefined);
+    setUsuario(null);
+    setFazenda(null);
+    setAnimais([]);
+    setAlertas([]);
+    setAba("rebanho");
+  }
+
+  // ------------------------------------------------------------------ dados
   const carregar = useCallback(async () => {
     try {
       const [novoResumo, novosPastos, novosAnimais, novosAlertas] = await Promise.all([
@@ -56,25 +90,29 @@ export default function App() {
       setOnline(true);
       setErro(null);
     } catch (falha) {
+      // 401 já é tratado pelo cliente (renova ou derruba a sessão); aqui só
+      // interessa sinalizar que o painel está desatualizado.
+      if (falha instanceof ErroApi && falha.status === 401) return;
       setOnline(false);
       setErro(falha instanceof Error ? falha.message : String(falha));
     }
   }, []);
 
   useEffect(() => {
+    if (!usuario) return;
     api.fazenda().then(setFazenda).catch(() => undefined);
-  }, []);
+  }, [usuario]);
 
   useEffect(() => {
+    if (!usuario) return;
     carregar();
     const timer = window.setInterval(carregar, INTERVALO_POLL_MS);
     return () => window.clearInterval(timer);
-  }, [carregar]);
+  }, [carregar, usuario]);
 
   const selecionado = animais.find((a) => a.id === selecionadoId) ?? null;
 
-  // ------------------------------------------------------------------ acoes
-  /** Selecionar do mapa recolhe a folha para o animal ficar visivel. */
+  // ------------------------------------------------------------------ ações
   function selecionarDoMapa(animal: Animal) {
     setSelecionadoId(animal.id);
     setPosicaoFolha("min");
@@ -149,6 +187,21 @@ export default function App() {
     }
   }
 
+  // --------------------------------------------------------------- portões
+  if (verificandoSessao) {
+    return (
+      <div className="tela-login">
+        <div className="login-marca">
+          Rastro<span>.</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (!usuario) {
+    return <TelaLogin onEntrou={setUsuario} />;
+  }
+
   // ------------------------------------------------------------------ abas
   const abas = (
     <>
@@ -165,11 +218,19 @@ export default function App() {
         Alertas
         {alertas.length > 0 && <span className="selo">{alertas.length}</span>}
       </button>
+      {editor && (
+        <button
+          className={`aba ${aba === "simular" ? "ativa" : ""}`}
+          onClick={() => trocarAba("simular")}
+        >
+          Simular
+        </button>
+      )}
       <button
-        className={`aba ${aba === "simular" ? "ativa" : ""}`}
-        onClick={() => trocarAba("simular")}
+        className={`aba ${aba === "conta" ? "ativa" : ""}`}
+        onClick={() => trocarAba("conta")}
       >
-        Simular
+        Conta
       </button>
     </>
   );
@@ -248,13 +309,11 @@ export default function App() {
           <button className="fab" onClick={enquadrarRebanho} aria-label="Enquadrar rebanho">
             ⊙
           </button>
-          <button
-            className="fab destaque"
-            onClick={iniciarDesenho}
-            aria-label="Desenhar novo pasto"
-          >
-            ⬡
-          </button>
+          {editor && (
+            <button className="fab destaque" onClick={iniciarDesenho} aria-label="Desenhar novo pasto">
+              ⬡
+            </button>
+          )}
         </div>
       )}
 
@@ -278,13 +337,15 @@ export default function App() {
           <FeedAlertas alertas={alertas} onResolver={resolverAlerta} onIrPara={irParaAnimal} />
         )}
 
-        {aba === "simular" && (
+        {aba === "simular" && editor && (
           <PainelSimulacao
             selecionado={selecionado}
             onCenario={definirCenario}
             onReiniciar={reiniciarSimulacao}
           />
         )}
+
+        {aba === "conta" && <PainelConta usuario={usuario} onSair={sair} />}
       </FolhaInferior>
     </div>
   );

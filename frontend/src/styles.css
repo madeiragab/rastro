@@ -237,8 +237,12 @@ button {
   gap: 8px;
 }
 
-.campo {
+.painel-desenho-linha .campo {
   flex: 1;
+}
+
+.campo {
+  width: 100%;
   min-width: 0;
   background: var(--painel-2);
   border: 1px solid var(--borda);
@@ -619,6 +623,119 @@ button {
 .popup-linha {
   font-size: 12px;
   color: var(--texto-fraco);
+}
+
+/* =================================================================== login */
+.tela-login {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px 18px calc(24px + var(--base-segura));
+  background:
+    radial-gradient(120% 90% at 50% 0%, #16241d 0%, var(--fundo) 62%);
+  overflow-y: auto;
+}
+
+.cartao-login {
+  width: 100%;
+  max-width: 380px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--painel);
+  border: 1px solid var(--borda);
+  border-radius: 18px;
+  padding: 26px 22px calc(22px + var(--base-segura));
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+}
+
+.login-marca {
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  line-height: 1;
+  text-align: center;
+}
+
+.login-marca span {
+  color: var(--verde);
+}
+
+.login-sub {
+  margin: 0 0 10px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--texto-fraco);
+}
+
+.rotulo {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--texto-fraco);
+  margin-top: 4px;
+}
+
+.cartao-login .botao {
+  margin-top: 8px;
+}
+
+/* ================================================================== conta */
+.linha-dado {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 38px;
+  font-size: 14px;
+}
+
+.etiqueta {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--texto-fraco);
+  background: var(--painel-2);
+  border: 1px solid var(--borda);
+  border-radius: 999px;
+  padding: 3px 9px;
+  white-space: nowrap;
+}
+
+.chave-nova {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(46, 158, 99, 0.1);
+  border: 1px solid var(--verde);
+  border-radius: 10px;
+  padding: 11px 12px;
+  font-size: 13px;
+}
+
+.chave-nova code {
+  display: block;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  word-break: break-all;
+  background: var(--fundo);
+  border-radius: 7px;
+  padding: 9px 10px;
+  /* Seleção fácil no celular: um toque longo pega a chave inteira. */
+  user-select: all;
+  -webkit-user-select: all;
+}
+
+.chave-nova button {
+  align-self: flex-start;
+}
+
+.erro.sucesso {
+  background: rgba(46, 158, 99, 0.12);
+  border-color: var(--verde);
+  color: #a9e8c5;
 }
 
 /* ================================================================ desktop  */

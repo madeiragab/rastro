@@ -9,7 +9,16 @@ from __future__ import annotations
 import datetime as dt
 
 from geoalchemy2 import Geometry
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, String, Text
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    Float,
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -127,3 +136,138 @@ class Alerta(Base):
     resolvido_em: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     animal: Mapped[Animal] = relationship()
+
+
+# ==========================================================================
+# Autenticacao e auditoria
+# ==========================================================================
+
+PAPEL_DONO = "dono"
+PAPEL_OPERADOR = "operador"
+PAPEL_LEITURA = "leitura"
+
+PAPEIS = (PAPEL_DONO, PAPEL_OPERADOR, PAPEL_LEITURA)
+
+# Ordem de privilegio. Usada pela dependencia `exige_papel`.
+NIVEL_PAPEL = {PAPEL_LEITURA: 0, PAPEL_OPERADOR: 1, PAPEL_DONO: 2}
+
+
+class Usuario(Base):
+    __tablename__ = "usuarios"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    fazenda_id: Mapped[int | None] = mapped_column(
+        ForeignKey("fazendas.id", ondelete="CASCADE"), index=True, nullable=True
+    )
+
+    # Guardado sempre em minusculas, para que a unicidade nao dependa de
+    # como o usuario digitou o e-mail no cadastro.
+    email: Mapped[str] = mapped_column(String(254), unique=True, index=True)
+    nome: Mapped[str] = mapped_column(String(120))
+
+    # Hash Argon2id. Contem o algoritmo e os parametros embutidos, o que
+    # permite reidratar o hash quando os parametros de custo mudarem.
+    senha_hash: Mapped[str] = mapped_column(String(255))
+    papel: Mapped[str] = mapped_column(String(20), default=PAPEL_OPERADOR)
+
+    ativo: Mapped[bool] = mapped_column(Boolean, default=True)
+    criado_em: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=agora)
+    senha_alterada_em: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=agora)
+    ultimo_login_em: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    fazenda: Mapped[Fazenda | None] = relationship()
+
+
+class SessaoRefresh(Base):
+    """Refresh token opaco, com rotacao e deteccao de reuso.
+
+    Guardamos apenas o SHA-256 do token. Um dump do banco nao permite se passar
+    por ninguem. SHA-256 e suficiente aqui (diferente de senha) porque o token
+    tem 256 bits de entropia -- nao ha dicionario a percorrer.
+
+    `familia` agrupa toda a cadeia de rotacoes de um mesmo login. Se um token ja
+    usado reaparecer, assume-se roubo e a familia inteira e revogada.
+    """
+
+    __tablename__ = "sessoes_refresh"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    usuario_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id", ondelete="CASCADE"), index=True)
+
+    familia: Mapped[str] = mapped_column(String(64), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+
+    criada_em: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=agora)
+    expira_em: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), index=True)
+    usada_em: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revogada_em: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    # Contexto para auditoria e para o usuario reconhecer sessoes suspeitas.
+    ip: Mapped[str] = mapped_column(String(45), default="")
+    user_agent: Mapped[str] = mapped_column(String(255), default="")
+
+    usuario: Mapped[Usuario] = relationship()
+
+
+class ChaveGateway(Base):
+    """Credencial de dispositivo, para o gateway enviar telemetria.
+
+    Gateway nao faz login com e-mail e senha: ele carrega uma chave longa,
+    trocavel e revogavel de forma independente das contas humanas. A chave e
+    mostrada uma unica vez, na criacao, e guardada como hash Argon2id.
+
+    O prefixo publico permite localizar a linha sem varrer a tabela inteira
+    verificando hashes -- comparar Argon2 de todas as chaves a cada requisicao
+    de telemetria seria caro de proposito.
+    """
+
+    __tablename__ = "chaves_gateway"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    fazenda_id: Mapped[int] = mapped_column(ForeignKey("fazendas.id", ondelete="CASCADE"), index=True)
+
+    nome: Mapped[str] = mapped_column(String(120))
+    prefixo: Mapped[str] = mapped_column(String(16), unique=True, index=True)
+    chave_hash: Mapped[str] = mapped_column(String(255))
+
+    ativa: Mapped[bool] = mapped_column(Boolean, default=True)
+    criada_em: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=agora)
+    expira_em: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    ultima_utilizacao: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revogada_em: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    fazenda: Mapped[Fazenda] = relationship()
+
+
+class TentativaLogin(Base):
+    """Registro de tentativas, para bloqueio progressivo por e-mail e por IP."""
+
+    __tablename__ = "tentativas_login"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(String(254), default="")
+    ip: Mapped[str] = mapped_column(String(45), default="")
+    sucesso: Mapped[bool] = mapped_column(Boolean, default=False)
+    criada_em: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=agora)
+
+
+Index("ix_tentativas_email_data", TentativaLogin.email, TentativaLogin.criada_em)
+Index("ix_tentativas_ip_data", TentativaLogin.ip, TentativaLogin.criada_em)
+
+
+class EventoAuditoria(Base):
+    """Trilha de auditoria de acoes sensiveis.
+
+    Append-only por convencao: nenhuma rota atualiza ou apaga linhas daqui.
+    """
+
+    __tablename__ = "eventos_auditoria"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    usuario_id: Mapped[int | None] = mapped_column(
+        ForeignKey("usuarios.id", ondelete="SET NULL"), index=True, nullable=True
+    )
+    acao: Mapped[str] = mapped_column(String(60), index=True)
+    detalhe: Mapped[str] = mapped_column(Text, default="")
+    ip: Mapped[str] = mapped_column(String(45), default="")
+    criado_em: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=agora, index=True)

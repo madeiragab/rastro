@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import datetime as dt
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 
 # ------------------------------------------------------------------ fazenda
@@ -63,15 +63,44 @@ class AnimalOut(BaseModel):
 
 # ------------------------------------------------------------------ posicao
 class PosicaoIn(BaseModel):
-    """Payload que o brinco enviaria. Existe para permitir integrar hardware
-    real sem tocar no resto da API."""
+    """Payload que o brinco enviaria, repassado pelo gateway.
 
-    brinco: str
-    lat: float
-    lon: float
-    atividade: float = 0.5
-    bateria_pct: int = 100
+    Toda faixa e validada aqui, e nao no banco: e entrada de rede vinda de um
+    dispositivo em campo, que pode estar com firmware velho, com defeito ou
+    sob controle de terceiros.
+    """
+
+    brinco: str = Field(min_length=1, max_length=15, pattern=r"^\d{1,15}$")
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
+    atividade: float = Field(default=0.5, ge=0, le=1)
+    bateria_pct: int = Field(default=100, ge=0, le=100)
     registrada_em: dt.datetime | None = None
+
+    @field_validator("registrada_em")
+    @classmethod
+    def _horario_plausivel(cls, v: dt.datetime | None) -> dt.datetime | None:
+        """Recusa carimbo de tempo absurdo.
+
+        Sem isso, um gateway comprometido poderia inserir posicao no futuro e
+        silenciar o alerta de perda de sinal para sempre, ou reescrever a
+        trilha do passado.
+        """
+        if v is None:
+            return None
+
+        momento = v if v.tzinfo else v.replace(tzinfo=dt.timezone.utc)
+        agora = dt.datetime.now(dt.timezone.utc)
+
+        # Alguma folga no futuro absorve relogio dessincronizado do dispositivo.
+        if momento > agora + dt.timedelta(minutes=5):
+            raise ValueError("registrada_em no futuro")
+        # Aceita ate 7 dias de atraso: o gateway pode ter ficado offline e estar
+        # descarregando um lote acumulado.
+        if momento < agora - dt.timedelta(days=7):
+            raise ValueError("registrada_em antiga demais")
+
+        return momento
 
 
 class PosicaoOut(BaseModel):
@@ -121,3 +150,63 @@ class CenarioIn(BaseModel):
         if v not in COMPORTAMENTOS:
             raise ValueError(f"comportamento deve ser um de {COMPORTAMENTOS}")
         return v
+
+
+# -------------------------------------------------------------- autenticacao
+class LoginIn(BaseModel):
+    email: EmailStr
+    # Sem `min_length` aqui de proposito: a politica de senha vale no cadastro
+    # e na troca. No login, recusar por tamanho antes de conferir vazaria que a
+    # senha guardada nao segue mais a politica atual.
+    senha: str = Field(repr=False)
+
+
+class TokenOut(BaseModel):
+    """O refresh token NAO aparece aqui -- ele so viaja em cookie HttpOnly.
+
+    Devolver o refresh no corpo obrigaria o front a guarda-lo em algum lugar
+    que o JavaScript le, e um XSS levaria a sessao de longa duracao junto.
+    """
+
+    access_token: str
+    token_type: str = "bearer"
+    expira_em_s: int
+    usuario: "UsuarioOut"
+
+
+class UsuarioOut(BaseModel):
+    id: int
+    email: str
+    nome: str
+    papel: str
+    fazenda_id: int | None
+    ultimo_login_em: dt.datetime | None
+
+
+class TrocarSenhaIn(BaseModel):
+    senha_atual: str = Field(repr=False)
+    senha_nova: str = Field(repr=False)
+
+
+class ChaveGatewayIn(BaseModel):
+    nome: str = Field(min_length=1, max_length=120)
+    dias_validade: int | None = Field(default=None, ge=1, le=3650)
+
+
+class ChaveGatewayOut(BaseModel):
+    id: int
+    nome: str
+    prefixo: str
+    ativa: bool
+    criada_em: dt.datetime
+    expira_em: dt.datetime | None
+    ultima_utilizacao: dt.datetime | None
+
+
+class ChaveGatewayCriadaOut(ChaveGatewayOut):
+    """Resposta da criacao. Unica vez em que a chave completa e exibida."""
+
+    chave: str = Field(repr=False)
+
+
+TokenOut.model_rebuild()
