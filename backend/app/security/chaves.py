@@ -38,8 +38,14 @@ def gerar() -> tuple[str, str, str]:
 
 
 def separar(chave: str) -> tuple[str, str] | None:
-    """Extrai `(prefixo, segredo)` de uma chave recebida. `None` se malformada."""
-    partes = (chave or "").split("_")
+    """Extrai `(prefixo, segredo)` de uma chave recebida. `None` se malformada.
+
+    O `maxsplit=3` nao e detalhe: `secrets.token_urlsafe` usa o alfabeto
+    base64url, que inclui `_`. Sem o limite, todo segredo contendo underscore
+    quebrava em partes demais e a chave era recusada para sempre -- cerca de um
+    terco das chaves geradas.
+    """
+    partes = (chave or "").split("_", 3)
     if len(partes) != 4:
         return None
     if f"{partes[0]}_{partes[1]}" != PREFIXO_FORMATO:

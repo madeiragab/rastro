@@ -91,7 +91,9 @@ def _abrir_sessao(
 
 
 def _resposta_de_token(db: Session, usuario: Usuario) -> TokenOut:
-    access, expira_s = tokens.criar_access_token(usuario.id, usuario.papel, usuario.fazenda_id)
+    access, expira_s = tokens.criar_access_token(
+        usuario.id, usuario.papel, usuario.fazenda_id, usuario.token_versao
+    )
     return TokenOut(
         access_token=access,
         expira_em_s=expira_s,
@@ -275,13 +277,17 @@ def trocar_senha(
     try:
         senhas.validar_forca(payload.senha_nova, email=usuario.email, nome=usuario.nome)
     except senhas.SenhaFraca as erro:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(erro)) from erro
+        # Literal em vez da constante: o Starlette renomeou
+        # HTTP_422_UNPROCESSABLE_ENTITY para ..._CONTENT, e usar qualquer um dos
+        # nomes prende o codigo a uma faixa de versao.
+        raise HTTPException(status_code=422, detail=str(erro)) from erro
 
     usuario.senha_hash = senhas.gerar_hash(payload.senha_nova)
-    # Invalida todo access token emitido antes deste instante (ver deps.py) e
-    # derruba todas as sessoes: se a troca foi motivada por suspeita de invasao,
-    # o invasor perde o acesso agora, nao daqui a 14 dias.
+    # Invalida todo access token ja emitido (ver deps.py) e derruba todas as
+    # sessoes: se a troca foi motivada por suspeita de invasao, o invasor perde
+    # o acesso agora, nao daqui a 14 dias.
     usuario.senha_alterada_em = agora()
+    usuario.token_versao += 1
     db.execute(
         update(SessaoRefresh)
         .where(SessaoRefresh.usuario_id == usuario.id, SessaoRefresh.revogada_em.is_(None))

@@ -175,6 +175,15 @@ class Usuario(Base):
     senha_alterada_em: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=agora)
     ultimo_login_em: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
+    # Incrementado a cada troca de senha. Vai como claim no access token, e a
+    # divergencia invalida o token na hora.
+    #
+    # Substitui a comparacao de `iat` com `senha_alterada_em`: o `iat` do JWT
+    # tem resolucao de 1 segundo, entao trocar a senha no mesmo segundo do
+    # login deixava o token anterior valido -- exatamente a janela que quem
+    # troca a senha por suspeita de invasao quer fechar.
+    token_versao: Mapped[int] = mapped_column(Integer, default=0)
+
     fazenda: Mapped[Fazenda | None] = relationship()
 
 

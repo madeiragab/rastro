@@ -69,8 +69,7 @@ def usuario_atual(
     # checagem, um token roubado continuaria valendo ate expirar mesmo depois
     # de a vitima trocar a senha -- que e justamente a acao de quem suspeita
     # de invasao.
-    emitido_em = int(claims.get("iat", 0))
-    if emitido_em < int(usuario.senha_alterada_em.timestamp()):
+    if int(claims.get("ver", -1)) != usuario.token_versao:
         raise _nao_autorizado()
 
     return usuario

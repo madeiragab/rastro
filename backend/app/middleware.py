@@ -54,7 +54,8 @@ class CabecalhosDeSeguranca(BaseHTTPMiddleware):
         if settings.cookie_secure:
             cabecalhos["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
 
-        # Nao entregamos a pilha usada de graca.
-        cabecalhos.pop("server", None)
+        # O cabecalho `Server` nao e removivel daqui: o uvicorn o injeta na
+        # camada de protocolo, depois que o ASGI ja devolveu a resposta. Quem
+        # o suprime e a flag `--no-server-header` na linha de comando.
 
         return resposta

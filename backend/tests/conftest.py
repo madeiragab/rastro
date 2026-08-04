@@ -26,6 +26,12 @@ os.environ.setdefault(
 os.environ.setdefault("SIMULATOR_ENABLED", "false")
 os.environ.setdefault("AMBIENTE", "desenvolvimento")
 
+# Argon2 barato SÓ nos testes. Em produção o custo alto é a proteção; aqui ele
+# dominava o relógio (a suíte inteira gasta mais tempo derivando hash do que
+# exercitando regra). O que se testa é o comportamento, não a dureza do KDF.
+os.environ.setdefault("ARGON2_MEMORIA_KIB", "8192")
+os.environ.setdefault("ARGON2_ITERACOES", "1")
+
 import pytest  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
 from sqlalchemy import create_engine, func, text  # noqa: E402
@@ -46,6 +52,10 @@ from app.security import chaves, senhas  # noqa: E402
 from app.services import geofence, telemetria  # noqa: E402
 
 SENHA_TESTE = "pasto-do-corrego-2026"
+
+# Domínio real de propósito: `.local` é reservado (RFC 6762) e o validador de
+# e-mail o recusa — foi exatamente o bug que impedia login na conta semeada.
+EMAIL_DONO = "dono@teste.com.br"
 
 # Retângulo de ~600 m x 600 m na região de Uberaba/MG.
 PASTO_TESTE = [
@@ -154,7 +164,7 @@ def animal(db, fazenda, pasto) -> Animal:
     return a
 
 
-def criar_usuario(db, fazenda, email="dono@teste.local", papel=PAPEL_DONO) -> Usuario:
+def criar_usuario(db, fazenda, email=EMAIL_DONO, papel=PAPEL_DONO) -> Usuario:
     u = Usuario(
         fazenda_id=fazenda.id,
         email=email,
@@ -185,7 +195,7 @@ def chave_gateway(db, fazenda) -> str:
     return criar_chave(db, fazenda)
 
 
-def entrar(cliente: TestClient, email="dono@teste.local", senha=SENHA_TESTE) -> str:
+def entrar(cliente: TestClient, email=EMAIL_DONO, senha=SENHA_TESTE) -> str:
     """Faz login e devolve o access token. Os cookies ficam no jar do cliente."""
     resposta = cliente.post("/api/auth/login", json={"email": email, "senha": senha})
     assert resposta.status_code == 200, resposta.text

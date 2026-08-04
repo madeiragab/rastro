@@ -27,7 +27,7 @@ services:
       CORS_ORIGINS: '["http://localhost:5173","http://127.0.0.1:5173"]'
       SECRET_KEY: ${SECRET_KEY:-dev-inseguro-nao-usar-fora-da-sua-maquina}
       COOKIE_SECURE: ${COOKIE_SECURE:-false}
-      ADMIN_EMAIL: ${ADMIN_EMAIL:-produtor@rastro.local}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-produtor@rastro.com.br}
       ADMIN_SENHA: ${ADMIN_SENHA:-}
       SIMULATOR_ENABLED: ${SIMULATOR_ENABLED:-true}
     depends_on:
@@ -37,7 +37,9 @@ services:
       - "127.0.0.1:${API_PORT:-8000}:8000"
     volumes:
       - ./backend/app:/code/app
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    # --no-server-header: o uvicorn injeta `Server: uvicorn` na camada de
+    # protocolo, depois do ASGI, então middleware não alcança. Só aqui.
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --no-server-header
 
   web:
     build: ./frontend

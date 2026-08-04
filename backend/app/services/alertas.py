@@ -34,6 +34,11 @@ from app.services import geofence
 
 
 def _alerta_aberto(db: Session, animal_id: int, tipo: str) -> Alerta | None:
+    # A sessao roda com autoflush desligado, entao um alerta criado nesta mesma
+    # transacao ainda nao estaria visivel para o SELECT -- e varias leituras
+    # processadas antes do commit gerariam alertas duplicados do mesmo tipo.
+    db.flush()
+
     return db.execute(
         select(Alerta)
         .where(Alerta.animal_id == animal_id, Alerta.tipo == tipo, Alerta.resolvido_em.is_(None))
@@ -100,7 +105,7 @@ def avaliar_posicao(db: Session, animal: Animal, lat: float, lon: float, ativida
                     animal,
                     ALERTA_FORA,
                     f"{animal.nome} saiu de {animal.pasto.nome} "
-                    f"({resultado.distancia_m:.0f} m alem da divisa).",
+                    f"({resultado.distancia_m:.0f} m além da divisa).",
                     severidade="alta",
                     lat=lat,
                     lon=lon,
@@ -124,7 +129,7 @@ def avaliar_posicao(db: Session, animal: Animal, lat: float, lon: float, ativida
                 db,
                 animal,
                 ALERTA_IMOVEL,
-                f"{animal.nome} sem movimento ha {minutos} min. "
+                f"{animal.nome} sem movimento há {minutos} min. "
                 "Verificar: parto, queda, atolamento ou morte.",
                 severidade="critica",
                 lat=lat,
@@ -177,8 +182,8 @@ def varrer_silencio(db: Session) -> int:
             db,
             animal,
             ALERTA_SEM_SINAL,
-            f"{animal.nome} sem comunicacao ha {desde}. "
-            "Verificar: brinco arrancado, bateria ou area sem propagacao.",
+            f"{animal.nome} sem comunicação há {desde}. "
+            "Verificar: brinco arrancado, bateria ou área sem propagação.",
             severidade="media",
         ):
             abertos += 1
