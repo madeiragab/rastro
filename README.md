@@ -9,9 +9,11 @@ The rancher draws the pasture boundary on a map and gets alerted when an animal
 
 Mobile-first web app with a built-in herd simulator — runs with no hardware at all.
 
-> **Status: MVP / demo.** The design follows current good practice, but it has
-> not been externally audited and **has not yet been run end to end**. See
-> [Before production](#before-production).
+> **Status: MVP / demo.** Runs end to end and is verified: 124 tests against real
+> PostGIS, plus a manual pass over login, session rotation, authenticated
+> telemetry and the full geofence alert cycle. It has **not** been externally
+> audited or penetration tested, and several production requirements are still
+> missing — see [Before production](#before-production).
 
 📚 **[Full documentation](docs/README.md)** — [requirements](docs/requirements.md) ·
 [architecture](docs/architecture.md) · [security](docs/security.md) ·
@@ -241,8 +243,10 @@ identification mandatory for all cattle movement from 2033.
   set `COOKIE_SECURE=true`.
 - **Second factor.** Not implemented. TOTP at least for the `owner` role.
 - **Password recovery.** Not implemented — forget it and the account is gone.
-- **Migrations.** Schema is created via `create_all`; a schema change means
-  recreating the database. Move to Alembic before the first pilot with real data.
+- **Migrations.** Schema is created via `create_all`, so **any model change
+  requires `docker compose down -v`** — otherwise the API starts and every query
+  hits a missing column. This already bit once. Move to Alembic before the first
+  pilot with real data.
 - **Push notifications.** Alerts only show inside the panel today. Push to the
   phone is the product's core promise and is the main reason a native React Native
   app is on the roadmap.
@@ -282,9 +286,15 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-The suite runs against **real PostGIS**, in a separate `rastro_test` database.
-The geofence rule *is* `ST_Contains` plus distance in `geography` — testing that
-against a stub would only test the stub.
+**124 passing, 4 skipped** (the skips are the deliberately public routes in the
+authorisation sweep). The run takes about 5 minutes.
+
+The suite runs against **real PostGIS**, in a separate `rastro_test` database
+that it creates on first run. The geofence rule *is* `ST_Contains` plus distance
+in `geography` — testing that against a stub would only test the stub.
+
+Argon2 cost is lowered by environment variable inside `conftest.py`. In
+production the cost *is* the protection; in tests it was only wall clock.
 
 What it covers:
 
