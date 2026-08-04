@@ -69,6 +69,51 @@ export interface Resumo {
   area_total_ha: number;
 }
 
+// --------------------------------------------------------------- sessão
+export type Papel = "dono" | "operador" | "leitura";
+
+export interface Usuario {
+  id: number;
+  email: string;
+  nome: string;
+  papel: Papel;
+  fazenda_id: number | null;
+  ultimo_login_em: string | null;
+}
+
+export interface RespostaLogin {
+  access_token: string;
+  token_type: string;
+  expira_em_s: number;
+  usuario: Usuario;
+}
+
+export interface ChaveGateway {
+  id: number;
+  nome: string;
+  prefixo: string;
+  ativa: boolean;
+  criada_em: string;
+  expira_em: string | null;
+  ultima_utilizacao: string | null;
+}
+
+/** Só a criação devolve a chave completa — e uma única vez. */
+export interface ChaveGatewayCriada extends ChaveGateway {
+  chave: string;
+}
+
+/** Ordem de privilégio, espelhando NIVEL_PAPEL do backend. */
+export const NIVEL_PAPEL: Record<Papel, number> = {
+  leitura: 0,
+  operador: 1,
+  dono: 2,
+};
+
+export function podeEditar(papel: Papel | undefined): boolean {
+  return papel !== undefined && NIVEL_PAPEL[papel] >= NIVEL_PAPEL.operador;
+}
+
 export const CORES_STATUS: Record<StatusAnimal, string> = {
   ok: "#2E9E63",
   fora_da_area: "#D64545",

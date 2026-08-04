@@ -9,8 +9,13 @@ O produtor desenha o pasto no mapa e recebe alerta quando o animal **sai da áre
 
 App web mobile-first com simulador de rebanho embutido — roda sem hardware nenhum.
 
-> **Status: MVP / demonstração.** Não está pronto para produção. Ver
+> **Status: MVP / demonstração.** O desenho segue boas práticas correntes, mas não
+> passou por auditoria externa e **ainda não foi executado de ponta a ponta**. Ver
 > [Pendências antes de produção](#pendências-antes-de-produção).
+
+📚 **[Documentação completa](docs/README.pt-BR.md)** — [requisitos](docs/requisitos.md) ·
+[arquitetura](docs/arquitetura.md) · [segurança](docs/seguranca.md) ·
+[decisões](docs/decisoes.md)
 
 ---
 
@@ -24,11 +29,16 @@ docker compose up --build
 |---|---|
 | App | http://localhost:5173 |
 | API (Swagger) | http://localhost:8000/docs |
-| Banco | localhost:5432 |
+| Banco | 127.0.0.1:5432 |
 
 O primeiro start cria o schema, habilita o PostGIS e carrega os dados de
 demonstração: uma fazenda em Uberaba/MG, dois pastos e 14 animais. O simulador
 começa a gerar telemetria em seguida.
+
+**As credenciais iniciais aparecem no log da API, uma única vez.** Procure o bloco
+`ACESSO INICIAL` em `docker compose logs api`. Ele traz o e-mail de acesso, uma
+senha sorteada e uma chave de gateway. Nada é fixo no código — credencial default
+versionada é como a maior parte dos sistemas expostos cai.
 
 Zerar tudo:
 
@@ -61,8 +71,8 @@ ou toque nele no mapa, e então:
 | **Perder sinal** | O brinco para de reportar. Após 60 s de silêncio, dispara o alerta de perda de sinal. |
 | **Pastando** | Volta ao normal; os alertas abertos se resolvem sozinhos. |
 
-Para desenhar um pasto novo: toque no botão **⬡**, toque nos vértices no mapa, dê um
-nome e salve.
+Para desenhar um pasto novo: toque em **⬡**, toque nos vértices no mapa, dê um nome
+e salve.
 
 ---
 
@@ -72,11 +82,31 @@ Mobile-first: o mapa ocupa a tela inteira e tudo mais flutua sobre ele.
 
 - **Folha inferior** com três paradas — arraste, ou toque na alça. Recolhida, ainda
   mostra uma faixa compacta de contadores.
-- **Abas**: Rebanho, Alertas (com selo de quantidade) e Simular.
+- **Abas**: Rebanho, Alertas (com selo), Simular e Conta.
 - Tocar num animal leva o mapa até ele — mas o mapa nunca se move sozinho quando
   chega posição nova. Mapa que pula a cada leitura é insuportável no celular.
 - A partir de 900 px de largura a folha vira painel lateral fixo, então o mesmo
   código serve no desktop.
+
+---
+
+## Segurança
+
+Texto completo em [docs/seguranca.md](docs/seguranca.md), com a lista honesta do
+que **não** está coberto.
+
+| Frente | Abordagem |
+|---|---|
+| Senha | Argon2id (64 MiB, t=3), normalizada em NFKC, reidratação automática quando o custo muda. Política do NIST SP 800-63B: comprimento + lista de bloqueio, sem regras de composição |
+| Sessão | Access JWT de 15 min guardado **só em memória** + refresh opaco de 14 dias em cookie `HttpOnly`, `SameSite=strict` |
+| Roubo de token | Rotação do refresh com detecção de reuso — token repetido revoga a família inteira da sessão (OAuth 2.0 Security BCP) |
+| CSRF | `SameSite=strict` mais double-submit comparado em tempo constante |
+| Força bruta | Bloqueio em banco, por conta **e** por IP (este último pega o password spraying) |
+| Enumeração | Mensagem genérica, tempo constante para e-mail inexistente, e bloqueio que vale para ele também |
+| Dispositivos | Chave de API por gateway, com hash Argon2id, exibida uma vez, revogável e restrita à própria fazenda |
+| Cabeçalhos | CSP fechada, `nosniff`, `DENY` de frame, `no-referrer`, COOP/CORP, `no-store`, HSTS sob HTTPS |
+| Configuração | A aplicação **se recusa a subir** em produção com segredo fraco, cookie inseguro, CORS `http://` não-local ou simulador ligado |
+| Autorização | Declarada no roteador, então rota nova nasce protegida; três papéis verificados no servidor |
 
 ---
 
@@ -93,34 +123,38 @@ PostgreSQL + PostGIS
 ```
 rastro/
 ├── docker-compose.yml
+├── docs/                       # requisitos, arquitetura, segurança, ADRs (PT + EN)
 ├── backend/
 │   └── app/
-│       ├── main.py            # bootstrap, CORS, ciclo de vida, simulador
-│       ├── config.py          # TODOS os limiares de alerta ficam aqui
-│       ├── database.py        # engine, sessão, criação do schema
-│       ├── models.py          # Fazenda, Pasto, Animal, Posicao, Alerta
-│       ├── schemas.py         # contratos de entrada e saída
-│       ├── seed.py            # carga de demonstração
+│       ├── main.py             # bootstrap, CORS, cabeçalhos, ciclo de vida
+│       ├── config.py           # TODOS os limiares e parâmetros de segurança
+│       ├── database.py         # engine, sessão, criação do schema
+│       ├── models.py           # domínio + usuários, sessões, chaves, auditoria
+│       ├── schemas.py          # contratos e faixas de entrada
+│       ├── middleware.py       # cabeçalhos de segurança na resposta
+│       ├── seed.py             # dados de demonstração + credenciais iniciais
+│       ├── security/
+│       │   ├── senhas.py       # Argon2id + política de senha
+│       │   ├── tokens.py       # access JWT, refresh, CSRF
+│       │   ├── chaves.py       # chaves de API dos gateways
+│       │   ├── limites.py      # bloqueio contra força bruta
+│       │   └── auditoria.py    # trilha de auditoria
 │       ├── api/
-│       │   ├── serializers.py # ORM -> schema (extrai lat/lon da geometria)
-│       │   └── routes/        # um módulo por recurso
+│       │   ├── deps.py         # dependências de autenticação e autorização
+│       │   ├── serializers.py  # ORM -> schema (extrai lat/lon da geometria)
+│       │   └── routes/         # um módulo por recurso
 │       └── services/
-│           ├── geofence.py    # ponto-em-polígono e distância (PostGIS)
-│           ├── alertas.py     # as três regras de alerta
-│           ├── telemetria.py  # ingestão de posição (ponto único)
-│           └── simulador.py   # rebanho virtual
+│           ├── geofence.py     # ponto-em-polígono e distância (PostGIS)
+│           ├── alertas.py      # as três regras de alerta
+│           ├── telemetria.py   # ingestão de posição (ponto único)
+│           ├── simulador.py    # rebanho virtual
+│           └── manutencao.py   # limpeza periódica
 └── frontend/
     └── src/
-        ├── App.tsx            # estado e polling
-        ├── api.ts             # cliente HTTP  ← reaproveitável no React Native
-        ├── types.ts           # espelho dos schemas  ← reaproveitável
+        ├── App.tsx             # estado, polling, portão de sessão
+        ├── api.ts              # cliente HTTP  ← reaproveitável no React Native
+        ├── types.ts            # espelho dos schemas  ← reaproveitável
         └── components/
-            ├── MapaView.tsx
-            ├── FolhaInferior.tsx   # folha deslizante, escrita à mão
-            ├── TirasResumo.tsx
-            ├── ListaAnimais.tsx
-            ├── FeedAlertas.tsx
-            └── PainelSimulacao.tsx
 ```
 
 ### Por que PostGIS
@@ -129,9 +163,6 @@ O ponto-em-polígono roda no banco (`ST_Contains`), não em Python. O banco já 
 índice espacial, e a distância em metros sai correta convertendo para `geography` —
 sem erro de projeção. Com o rebanho crescendo, é essa decisão que evita reescrever a
 camada de dados depois.
-
-`api.ts` e `types.ts` são independentes de framework de propósito: o app React Native
-planejado reaproveita os dois como estão.
 
 ---
 
@@ -162,34 +193,40 @@ lado de cada um (imobilidade 4 h, reporte a cada 30 min).
 
 ## API
 
-| Método | Rota | Para quê |
-|---|---|---|
-| `GET` | `/api/fazenda` | Fazenda atual (o MVP é monofazenda) |
-| `GET` | `/api/resumo` | Contadores do painel |
-| `GET` | `/api/pastos` | Lista de pastos com área e nº de animais |
-| `POST` | `/api/pastos` | Cria pasto a partir dos vértices desenhados |
-| `DELETE` | `/api/pastos/{id}` | Remove pasto (recusa se houver animais vinculados) |
-| `GET` | `/api/animais` | Animais com última posição e status |
-| `GET` | `/api/animais/{id}` | Um animal |
-| `GET` | `/api/animais/{id}/trilha` | Trilha de posições recentes |
-| `GET` | `/api/alertas` | Alertas, abertos por padrão |
-| `POST` | `/api/alertas/{id}/resolver` | Resolve um alerta |
-| `POST` | `/api/alertas/animal/{id}/resolver` | Resolve todos os alertas de um animal |
-| `POST` | `/api/telemetria` | **Ingestão de posição — a porta de entrada do hardware** |
-| `POST` | `/api/simulacao/cenario` | Força um cenário (só demonstração) |
-| `POST` | `/api/simulacao/reiniciar` | Reinicia a simulação (só demonstração) |
+Tudo sob `/api` exige autenticação. `/health` e o fluxo de login são os únicos
+endpoints públicos.
 
-Referência interativa completa em http://localhost:8000/docs.
+| Método | Rota | Autenticação | Para quê |
+|---|---|---|---|
+| `POST` | `/api/auth/login` | — | Entrar; grava os cookies de refresh e CSRF |
+| `POST` | `/api/auth/refresh` | cookie + CSRF | Rotaciona a sessão e devolve access novo |
+| `POST` | `/api/auth/logout` | cookie | Revoga a família da sessão |
+| `GET` | `/api/auth/eu` | usuário | Usuário atual |
+| `POST` | `/api/auth/senha` | usuário | Troca a senha (encerra todas as sessões) |
+| `GET` | `/api/fazenda` | usuário | Fazenda atual |
+| `GET` | `/api/resumo` | usuário | Contadores do painel |
+| `GET` | `/api/animais` | usuário | Animais com última posição e status |
+| `GET` | `/api/animais/{id}/trilha` | usuário | Trilha de posições recentes |
+| `GET` | `/api/alertas` | usuário | Alertas, abertos por padrão |
+| `POST` | `/api/alertas/{id}/resolver` | usuário | Resolve um alerta |
+| `GET` `POST` `DELETE` | `/api/pastos` | operador | Gerencia pastos |
+| `GET` `POST` `DELETE` | `/api/gateways` | dono | Gerencia chaves de gateway |
+| `POST` | `/api/telemetria` | **chave de gateway** | Ingestão de posição — porta de entrada do hardware |
+| `POST` | `/api/simulacao/*` | operador | Força cenários (só demonstração) |
+
+Referência interativa em http://localhost:8000/docs — desligada em produção.
 
 ---
 
 ## Integrar hardware real
 
-O simulador e o gateway real entram pelo mesmo caminho. Basta o gateway chamar:
+O simulador e o gateway real usam o mesmo serviço. O gateway se autentica com a
+própria chave:
 
 ```bash
 curl -X POST http://localhost:8000/api/telemetria \
   -H "Content-Type: application/json" \
+  -H "X-API-Key: rastro_gw_<prefixo>_<segredo>" \
   -d '{"brinco":"076000000000001","lat":-19.7480,"lon":-47.9320,"atividade":0.6,"bateria_pct":88}'
 ```
 
@@ -204,18 +241,21 @@ bovinos a partir de 2033.
 
 ## Pendências antes de produção
 
-- **Autenticação.** A API está totalmente aberta, inclusive o endpoint de telemetria,
-  que aceita posição de qualquer origem. Precisa de chave por gateway ou mTLS, e login
-  no painel. É bloqueante para qualquer coisa além de demonstração local.
-- **Migrações.** O schema é criado por `create_all`. Trocar por Alembic quando
-  estabilizar.
-- **Tempo real.** O cliente faz polling a cada 3 s. Trocar por WebSocket ou SSE quando
-  o volume justificar.
+- **TLS.** O compose serve HTTP puro. Terminar TLS num proxy reverso e ligar
+  `COOKIE_SECURE=true`.
+- **Segundo fator.** Não implementado. TOTP ao menos para o papel `dono`.
+- **Recuperação de senha.** Não implementada — esqueceu, perdeu a conta.
+- **Migrações.** O schema é criado por `create_all`; mudança de schema exige
+  recriar o banco. Trocar por Alembic antes do primeiro piloto com dado real.
 - **Notificação push.** Hoje o alerta só aparece dentro do painel. O push para o
-  celular é a promessa central do produto e ainda não existe — é também o principal
-  motivo do app React Native estar no roadmap.
-- **Multi-fazenda.** O MVP assume uma fazenda só (`GET /api/fazenda` devolve a
-  primeira).
+  celular é a promessa central do produto e é o principal motivo do app React
+  Native estar no roadmap.
+- **Multi-fazenda.** O MVP assume uma fazenda só.
+- **Gestão de segredos.** Os segredos vêm de variável de ambiente, visível em
+  `docker inspect`. Migrar para um cofre.
+
+A lista completa, com risco e remédio de cada item, está em
+[docs/seguranca.md](docs/seguranca.md#o-que-não-está-protegido).
 
 ---
 
@@ -255,4 +295,4 @@ Precisa de um PostgreSQL com PostGIS. Ajuste `DATABASE_URL`.
 ## Stack
 
 React 18 · TypeScript · Vite · Leaflet · FastAPI · SQLAlchemy 2.0 · GeoAlchemy2 ·
-PostgreSQL 16 · PostGIS 3.4 · Docker Compose
+Argon2id · PyJWT · PostgreSQL 16 · PostGIS 3.4 · Docker Compose

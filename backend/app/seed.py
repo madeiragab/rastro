@@ -6,13 +6,18 @@ Roda uma unica vez, no primeiro start, se o banco estiver vazio.
 
 from __future__ import annotations
 
+import logging
 import random
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models import Animal, Fazenda, Pasto
+from app.config import segredo_aleatorio, settings
+from app.models import PAPEL_DONO, Animal, ChaveGateway, Fazenda, Pasto, Usuario
+from app.security import chaves, senhas
 from app.services import geofence, telemetria
+
+log = logging.getLogger("rastro.seed")
 
 # Ponto de referencia: regiao de Uberaba, MG.
 PASTO_SEDE = [
@@ -122,5 +127,58 @@ def semear(db: Session) -> bool:
         lat, lon = _ponto_dentro(db, animal.pasto_id)
         telemetria.registrar(db, animal, lat, lon, atividade=random.uniform(0.3, 0.8))
 
+    _criar_acesso_inicial(db, fazenda)
+
     db.commit()
     return True
+
+
+def _criar_acesso_inicial(db: Session, fazenda: Fazenda) -> None:
+    """Cria a conta inicial e uma chave de gateway, e imprime as credenciais.
+
+    A senha vem de `ADMIN_SENHA` quando definida; senao e sorteada. Nunca ha
+    senha fixa no codigo -- credencial default versionada e como a maioria dos
+    sistemas expostos e invadida.
+
+    As duas credenciais aparecem no log **uma unica vez**, na primeira subida.
+    Depois disso so existem como hash.
+    """
+    senha = settings.admin_senha or segredo_aleatorio(12)
+
+    usuario = Usuario(
+        fazenda_id=fazenda.id,
+        email=settings.admin_email.lower(),
+        nome=fazenda.proprietario,
+        senha_hash=senhas.gerar_hash(senha),
+        papel=PAPEL_DONO,
+    )
+    db.add(usuario)
+
+    chave, prefixo, hash_ = chaves.gerar()
+    db.add(
+        ChaveGateway(
+            fazenda_id=fazenda.id,
+            nome="Gateway da sede",
+            prefixo=prefixo,
+            chave_hash=hash_,
+        )
+    )
+
+    log.warning(
+        "\n"
+        "==========================================================\n"
+        " ACESSO INICIAL -- mostrado apenas nesta primeira subida\n"
+        "----------------------------------------------------------\n"
+        " e-mail: %s\n"
+        " senha:  %s\n"
+        "\n"
+        " chave do gateway (header X-API-Key):\n"
+        " %s\n"
+        "----------------------------------------------------------\n"
+        " Troque a senha no primeiro acesso. Em producao, defina\n"
+        " ADMIN_SENHA no ambiente e nao use a senha sorteada.\n"
+        "==========================================================",
+        usuario.email,
+        senha,
+        chave,
+    )

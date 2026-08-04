@@ -7,7 +7,9 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rastro}
       POSTGRES_DB: ${POSTGRES_DB:-rastro}
     ports:
-      - "${POSTGRES_PORT:-5432}:5432"
+      # Exposto só no loopback: sem o 127.0.0.1 o Docker publica em 0.0.0.0 e
+      # o banco fica visível para a rede local inteira.
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
     volumes:
       - rastro_pgdata:/var/lib/postgresql/data
     healthcheck:
@@ -20,14 +22,19 @@ services:
     build: ./backend
     container_name: rastro-api
     environment:
+      AMBIENTE: ${AMBIENTE:-desenvolvimento}
       DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-rastro}:${POSTGRES_PASSWORD:-rastro}@db:5432/${POSTGRES_DB:-rastro}
       CORS_ORIGINS: '["http://localhost:5173","http://127.0.0.1:5173"]'
-      SIMULATOR_ENABLED: "true"
+      SECRET_KEY: ${SECRET_KEY:-dev-inseguro-nao-usar-fora-da-sua-maquina}
+      COOKIE_SECURE: ${COOKIE_SECURE:-false}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-produtor@rastro.local}
+      ADMIN_SENHA: ${ADMIN_SENHA:-}
+      SIMULATOR_ENABLED: ${SIMULATOR_ENABLED:-true}
     depends_on:
       db:
         condition: service_healthy
     ports:
-      - "${API_PORT:-8000}:8000"
+      - "127.0.0.1:${API_PORT:-8000}:8000"
     volumes:
       - ./backend/app:/code/app
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
@@ -39,6 +46,8 @@ services:
       API_PROXY_TARGET: http://api:8000
     depends_on:
       - api
+    # Publicado em 0.0.0.0 de propósito: é o que permite abrir o app no celular
+    # pela rede Wi-Fi local. Só faça isso em rede confiável.
     ports:
       - "${WEB_PORT:-5173}:5173"
     volumes:
