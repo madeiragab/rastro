@@ -278,6 +278,35 @@ poucos pontos — gateway ou coleira — em vez de replicá-lo em cada animal.**
 
 ---
 
+## Testes
+
+```bash
+docker compose up -d db
+cd backend
+pip install -r requirements-dev.txt
+pytest
+```
+
+A suíte roda contra **PostGIS de verdade**, num banco `rastro_test` separado. A
+regra de geocerca *é* o `ST_Contains` mais distância em `geography` — testar isso
+com um dublê seria testar o dublê.
+
+O que cobre:
+
+| Arquivo | Foco |
+|---|---|
+| `test_seguranca_primitivas.py` | Argon2id, política de senha, normalização NFKC, claims do JWT, recusa de `alg=none`, token adulterado e expirado, formato da chave de gateway |
+| `test_auth.py` | Login, mensagem genérica para e-mail inexistente, bloqueio, rotação de refresh, **detecção de reuso revogando a família**, logout, troca de senha invalidando token antigo |
+| `test_autorizacao.py` | Varredura parametrizada garantindo que **toda** rota da OpenAPI recusa acesso anônimo, mais a matriz de papéis e os cabeçalhos de segurança |
+| `test_telemetria.py` | Autenticação por chave, recusa entre fazendas, faixas de entrada, carimbo no futuro ou antigo demais |
+| `test_alertas.py` | As três regras — incluindo os casos que **não** podem disparar: uma leitura isolada fora, animal pastando dentro da tolerância, e GNSS parado com acelerômetro normal |
+
+A varredura do `test_autorizacao.py` é a mais importante: ela falha se alguém
+adicionar rota sem proteção, o que transforma o ADR-007 de intenção em regra
+verificável.
+
+---
+
 ## Desenvolver sem Docker
 
 ```bash
