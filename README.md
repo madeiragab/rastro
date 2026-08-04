@@ -273,6 +273,35 @@ points — a gateway or a collar — instead of replicating it on every animal.*
 
 ---
 
+## Tests
+
+```bash
+docker compose up -d db
+cd backend
+pip install -r requirements-dev.txt
+pytest
+```
+
+The suite runs against **real PostGIS**, in a separate `rastro_test` database.
+The geofence rule *is* `ST_Contains` plus distance in `geography` — testing that
+against a stub would only test the stub.
+
+What it covers:
+
+| File | Focus |
+|---|---|
+| `test_seguranca_primitivas.py` | Argon2id, password policy, NFKC normalisation, JWT claims, `alg=none` rejection, tampered/expired tokens, gateway key format |
+| `test_auth.py` | Login, generic message for unknown emails, lockout, refresh rotation, **reuse detection revoking the family**, logout, password change invalidating old tokens |
+| `test_autorizacao.py` | Parametrised sweep asserting **every** route in the OpenAPI schema refuses anonymous access, plus the role matrix and security headers |
+| `test_telemetria.py` | Gateway key auth, cross-farm rejection, input ranges, future/stale timestamp rejection |
+| `test_alertas.py` | The three rules — including the cases that must **not** fire: one isolated reading outside, grazing inside the tolerance zone, and a static GNSS fix with normal accelerometer activity |
+
+The sweep in `test_autorizacao.py` is the one that matters most: it fails if
+anyone adds a route without protection, which is what makes ADR-007 enforceable
+rather than aspirational.
+
+---
+
 ## Local development without Docker
 
 ```bash
