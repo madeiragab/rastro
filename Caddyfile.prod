@@ -15,7 +15,9 @@
 		reverse_proxy api:8000
 	}
 
-	handle /health {
+	# Com asterisco: `handle /health` casaria só o caminho exato, e
+	# /health/pronto cairia no frontend.
+	handle /health* {
 		reverse_proxy api:8000
 	}
 

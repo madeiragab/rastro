@@ -114,19 +114,50 @@ Abra `https://rastro.seudominio.com.br` e troque a senha no primeiro acesso.
 ## 6. Verificar
 
 ```bash
-# TLS válido e serviço de pé
-curl -sS https://rastro.seudominio.com.br/health
+D=https://rastro.seudominio.com.br
 
-# Cabeçalhos de segurança
-curl -sSI https://rastro.seudominio.com.br/ | grep -iE "strict-transport|x-frame|x-content"
+# Prontidão: responde "pronto" só se o banco estiver alcançável
+curl -sS $D/health/pronto
 
-# A documentação interativa PRECISA estar desligada em produção
-curl -sS -o /dev/null -w "%{http_code}\n" https://rastro.seudominio.com.br/docs   # 404
+# A API recusa quem não tem credencial
+curl -sS -o /dev/null -w "%{http_code}\n" $D/api/animais          # 401
+
+# Cabeçalhos de segurança no HTML principal
+curl -sSI $D/ | grep -iE "content-security-policy|strict-transport|x-frame"
+
+# Cookie de sessão com os três atributos
+curl -sSI -X POST $D/api/auth/login -H 'Content-Type: application/json' \
+  -d '{"email":"x@x.com","senha":"x"}' | grep -i set-cookie
 ```
+
+> **Não teste `/docs`.** Ele responde 200 e isso está certo: a documentação
+> interativa da API está desligada, mas `/docs` não é rota da API — cai no
+> fallback da SPA, como qualquer caminho desconhecido. Quem responde a API é
+> `/api/*`. (Este guia mandava checar 404 aqui; estava errado.)
 
 Teste a recuperação de senha de ponta a ponta: peça o link, confirme que o
 e-mail chega, redefina. Se não chegar, o SMTP está errado — e você só vai
 descobrir isso quando alguém precisar, se não testar agora.
+
+## 6.1. Ensaio antes de ir para o servidor
+
+Dá para rodar a **mesma** configuração de produção na sua máquina antes de
+subir. Sem bind mount, sem reload, simulador desligado, nginx no lugar do dev
+server — trocando só o certificado (autoridade local) e o SMTP (um coletor que
+mostra o e-mail em vez de entregar):
+
+```bash
+cp Caddyfile.prod-local.example Caddyfile.prod-local
+cp .env.production.example .env.production.local   # ajuste DOMINIO=localhost
+
+docker compose -f docker-compose.prod.yml -f docker-compose.prod-local.yml \
+  --env-file .env.production.local -p rastroprod up -d --build
+```
+
+App em `https://localhost`, e-mails capturados em `http://localhost:8025`.
+
+Vale o trabalho: descobrir no servidor que o build quebra, a migração falha ou o
+e-mail não sai é caro e público.
 
 ## 7. Backup
 

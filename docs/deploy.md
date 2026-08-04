@@ -114,19 +114,50 @@ Open `https://rastro.yourdomain.com` and change the password on first login.
 ## 6. Verify
 
 ```bash
-# Valid TLS and service up
-curl -sS https://rastro.yourdomain.com/health
+D=https://rastro.yourdomain.com
 
-# Security headers
-curl -sSI https://rastro.yourdomain.com/ | grep -iE "strict-transport|x-frame|x-content"
+# Readiness: answers "pronto" only if the database is reachable
+curl -sS $D/health/pronto
 
-# Interactive docs MUST be off in production
-curl -sS -o /dev/null -w "%{http_code}\n" https://rastro.yourdomain.com/docs   # 404
+# The API rejects anyone without credentials
+curl -sS -o /dev/null -w "%{http_code}\n" $D/api/animais          # 401
+
+# Security headers on the main HTML
+curl -sSI $D/ | grep -iE "content-security-policy|strict-transport|x-frame"
+
+# Session cookie with all three attributes
+curl -sSI -X POST $D/api/auth/login -H 'Content-Type: application/json' \
+  -d '{"email":"x@x.com","senha":"x"}' | grep -i set-cookie
 ```
+
+> **Do not test `/docs`.** It returns 200 and that is correct: the interactive
+> API docs are disabled, but `/docs` is not an API route — it falls through to
+> the SPA, like any unknown path. The API answers under `/api/*`. (This guide
+> used to tell you to check for a 404 here; that was wrong.)
 
 Test password recovery end to end: request the link, confirm the email arrives,
 reset. If it does not arrive, SMTP is misconfigured — and you will only find out
 when someone actually needs it, unless you test now.
+
+## 6.1. Rehearse before touching the server
+
+You can run the **same** production configuration on your own machine first. No
+bind mounts, no reload, simulator off, nginx instead of the dev server — swapping
+only the certificate (local authority) and SMTP (a catcher that shows the email
+instead of delivering it):
+
+```bash
+cp Caddyfile.prod-local.example Caddyfile.prod-local
+cp .env.production.example .env.production.local   # set DOMINIO=localhost
+
+docker compose -f docker-compose.prod.yml -f docker-compose.prod-local.yml \
+  --env-file .env.production.local -p rastroprod up -d --build
+```
+
+App at `https://localhost`, captured emails at `http://localhost:8025`.
+
+Worth the effort: finding out on the server that the build breaks, a migration
+fails, or email does not go out is expensive and public.
 
 ## 7. Backups
 

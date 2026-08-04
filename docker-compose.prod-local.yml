@@ -1,0 +1,46 @@
+# Ensaio da pilha de produção, na sua máquina.
+#
+#   docker compose -f docker-compose.prod.yml -f docker-compose.prod-local.yml \
+#     --env-file .env.production.local up -d --build
+#
+# Por que existe: subir direto no servidor e descobrir lá que o build quebra, a
+# migração falha ou o e-mail não sai é caro e público. Aqui roda a MESMA
+# configuração de produção — sem bind mount, sem reload, simulador desligado,
+# nginx no lugar do dev server — trocando apenas duas coisas que não podem ser
+# reais localmente:
+#
+#   - o certificado, porque o Let's Encrypt não emite para localhost;
+#   - o servidor de e-mail, trocado por um coletor que mostra o que seria
+#     enviado, em vez de entregar de verdade.
+
+services:
+  proxy:
+    environment:
+      DOMINIO: localhost
+    volumes:
+      - ./Caddyfile.prod-local:/etc/caddy/Caddyfile:ro
+
+  api:
+    environment:
+      # O Caddy local usa autoridade própria; do lado do navegador continua
+      # sendo https, que é o que importa para cookie seguro e Service Worker.
+      APP_URL: https://localhost
+      CORS_ORIGINS: '["https://localhost"]'
+      SMTP_HOST: mailpit
+      SMTP_PORTA: "1025"
+      SMTP_USUARIO: ""
+      SMTP_SENHA: ""
+      SMTP_SEGURANCA: nenhuma
+    depends_on:
+      db:
+        condition: service_healthy
+      mailpit:
+        condition: service_started
+
+  # Coletor de e-mail: aceita SMTP e mostra a mensagem numa interface web em
+  # http://localhost:8025, sem entregar nada a ninguém.
+  mailpit:
+    image: axllent/mailpit:latest
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:8025:8025"

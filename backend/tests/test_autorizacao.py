@@ -27,7 +27,10 @@ PUBLICAS = {
     # se autenticar para pedir a redefinição.
     ("POST", "/api/auth/esqueci"),
     ("POST", "/api/auth/redefinir"),
+    # Sondas de infraestrutura: precisam responder sem credencial, senão o
+    # orquestrador não consegue saber se o serviço está de pé.
     ("GET", "/health"),
+    ("GET", "/health/pronto"),
 }
 
 

@@ -4,7 +4,7 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
@@ -100,5 +100,30 @@ app.include_router(api_router)
 
 @app.get("/health", tags=["infra"])
 def health() -> dict[str, str]:
-    """Sonda de disponibilidade. Nao revela versao nem estado interno."""
+    """Vivacidade: o processo responde.
+
+    De proposito nao toca no banco. Se o banco cair, reiniciar a API nao
+    resolve -- e e isso que um orquestrador faz quando esta sonda falha.
+    """
     return {"status": "ok"}
+
+
+@app.get("/health/pronto", tags=["infra"])
+def prontidao(resposta: Response) -> dict[str, str]:
+    """Prontidao: da para atender requisicao de verdade?
+
+    Existe separada porque a sonda anterior passava com o banco fora. Um
+    healthcheck que nunca falha nao e healthcheck, e enfeite: o container
+    aparecia como saudavel enquanto toda rota devolvia erro.
+    """
+    try:
+        with engine.connect() as conn:
+            conn.execute(text("SELECT 1"))
+    except Exception:  # noqa: BLE001
+        log.exception("prontidao: banco indisponivel")
+        # 503 e o que faz o balanceador tirar esta instancia da rotacao.
+        resposta.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+        # Sem detalhe do erro: a sonda costuma ficar exposta.
+        return {"status": "indisponivel"}
+
+    return {"status": "pronto"}
