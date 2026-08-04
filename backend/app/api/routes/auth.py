@@ -17,15 +17,23 @@ from __future__ import annotations
 import datetime as dt
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
 from app.api.deps import ip_do_cliente, usuario_atual
 from app.config import settings
 from app.database import get_db
-from app.models import SessaoRefresh, Usuario, agora
-from app.schemas import LoginIn, TokenOut, TrocarSenhaIn, UsuarioOut
+from app.models import SessaoRefresh, TokenResetSenha, Usuario, agora
+from app.schemas import (
+    EsqueciSenhaIn,
+    LoginIn,
+    RedefinirSenhaIn,
+    TokenOut,
+    TrocarSenhaIn,
+    UsuarioOut,
+)
 from app.security import auditoria, limites, senhas, tokens
+from app.services import notificacao
 
 router = APIRouter(prefix="/auth", tags=["autenticacao"])
 
@@ -257,6 +265,123 @@ def logout(request: Request, resposta: Response, db: Session = Depends(get_db)) 
 
 
 # ----------------------------------------------------------------- eu / senha
+# ------------------------------------------------------- redefinicao de senha
+@router.post("/esqueci", status_code=status.HTTP_202_ACCEPTED)
+def esqueci_senha(
+    payload: EsqueciSenhaIn,
+    request: Request,
+    db: Session = Depends(get_db),
+) -> dict[str, str]:
+    """Solicita um link de redefinicao.
+
+    Responde **sempre** 202, exista ou nao a conta. Uma resposta diferente para
+    e-mail inexistente transformaria este endpoint num verificador de cadastro
+    aberto na internet -- e ele nao exige autenticacao nenhuma.
+    """
+    email = payload.email.lower()
+    ip = ip_do_cliente(request)
+    resposta_padrao = {"detail": "se houver conta com este e-mail, o link foi enviado"}
+
+    usuario = db.execute(select(Usuario).where(Usuario.email == email)).scalar_one_or_none()
+    if usuario is None or not usuario.ativo:
+        auditoria.registrar(db, auditoria.SENHA_RESET_SOLICITADO, detalhe=f"{email} (sem conta)", ip=ip)
+        db.commit()
+        return resposta_padrao
+
+    # Limite por conta: sem isso, o endpoint vira gerador de spam apontado para
+    # a caixa de entrada de outra pessoa.
+    uma_hora = agora() - dt.timedelta(hours=1)
+    recentes = db.execute(
+        select(func.count())
+        .select_from(TokenResetSenha)
+        .where(TokenResetSenha.usuario_id == usuario.id, TokenResetSenha.criado_em >= uma_hora)
+    ).scalar_one()
+
+    if recentes >= settings.reset_max_por_hora:
+        auditoria.registrar(
+            db, auditoria.SENHA_RESET_SOLICITADO, usuario_id=usuario.id,
+            detalhe="recusado: limite por hora", ip=ip,
+        )
+        db.commit()
+        return resposta_padrao
+
+    claro, hash_ = tokens.gerar_refresh_token()  # mesma primitiva: 256 bits opacos
+    db.add(
+        TokenResetSenha(
+            usuario_id=usuario.id,
+            token_hash=hash_,
+            expira_em=agora() + dt.timedelta(minutes=settings.reset_token_ttl_min),
+            ip=ip,
+        )
+    )
+    auditoria.registrar(db, auditoria.SENHA_RESET_SOLICITADO, usuario_id=usuario.id, ip=ip)
+    db.commit()
+
+    notificacao.enviar_link_de_reset(
+        usuario.email,
+        f"{settings.app_url}/redefinir?token={claro}",
+        settings.reset_token_ttl_min,
+    )
+    return resposta_padrao
+
+
+@router.post("/redefinir", status_code=status.HTTP_204_NO_CONTENT)
+def redefinir_senha(
+    payload: RedefinirSenhaIn,
+    request: Request,
+    resposta: Response,
+    db: Session = Depends(get_db),
+) -> None:
+    """Consome o token e grava a senha nova."""
+    ip = ip_do_cliente(request)
+    invalido = HTTPException(status_code=400, detail="link invalido ou expirado")
+
+    registro = db.execute(
+        select(TokenResetSenha).where(
+            TokenResetSenha.token_hash == tokens.hash_refresh(payload.token)
+        )
+    ).scalar_one_or_none()
+
+    momento = agora()
+    if registro is None or registro.usado_em is not None or registro.expira_em <= momento:
+        raise invalido
+
+    usuario = db.get(Usuario, registro.usuario_id)
+    if usuario is None or not usuario.ativo:
+        raise invalido
+
+    try:
+        senhas.validar_forca(payload.senha_nova, email=usuario.email, nome=usuario.nome)
+    except senhas.SenhaFraca as erro:
+        raise HTTPException(status_code=422, detail=str(erro)) from erro
+
+    registro.usado_em = momento
+    usuario.senha_hash = senhas.gerar_hash(payload.senha_nova)
+    usuario.senha_alterada_em = momento
+    usuario.token_versao += 1
+
+    # Derruba tudo: quem redefine a senha normalmente perdeu o controle da
+    # conta, e as sessoes abertas podem ser de quem tomou.
+    db.execute(
+        update(SessaoRefresh)
+        .where(SessaoRefresh.usuario_id == usuario.id, SessaoRefresh.revogada_em.is_(None))
+        .values(revogada_em=momento)
+    )
+    # Invalida os demais links pendentes desta conta.
+    db.execute(
+        update(TokenResetSenha)
+        .where(
+            TokenResetSenha.usuario_id == usuario.id,
+            TokenResetSenha.usado_em.is_(None),
+        )
+        .values(usado_em=momento)
+    )
+
+    auditoria.registrar(db, auditoria.SENHA_RESET_USADO, usuario_id=usuario.id, ip=ip)
+    db.commit()
+    _limpar_cookies(resposta)
+
+
 @router.get("/eu", response_model=UsuarioOut)
 def eu(usuario: Usuario = Depends(usuario_atual)) -> UsuarioOut:
     return UsuarioOut.model_validate(usuario, from_attributes=True)

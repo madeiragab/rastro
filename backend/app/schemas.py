@@ -179,6 +179,7 @@ class UsuarioOut(BaseModel):
     email: str
     nome: str
     papel: str
+    ativo: bool
     fazenda_id: int | None
     ultimo_login_em: dt.datetime | None
 
@@ -186,6 +187,56 @@ class UsuarioOut(BaseModel):
 class TrocarSenhaIn(BaseModel):
     senha_atual: str = Field(repr=False)
     senha_nova: str = Field(repr=False)
+
+
+class EsqueciSenhaIn(BaseModel):
+    email: EmailStr
+
+
+class RedefinirSenhaIn(BaseModel):
+    token: str = Field(min_length=10, repr=False)
+    senha_nova: str = Field(repr=False)
+
+
+# ------------------------------------------------------------------ equipe
+class UsuarioIn(BaseModel):
+    email: EmailStr
+    nome: str = Field(min_length=1, max_length=120)
+    papel: str = "operador"
+
+    @field_validator("papel")
+    @classmethod
+    def _papel_valido(cls, v: str) -> str:
+        from app.models import PAPEIS
+
+        if v not in PAPEIS:
+            raise ValueError(f"papel deve ser um de {PAPEIS}")
+        return v
+
+
+class UsuarioCriadoOut(UsuarioOut):
+    """A senha inicial e sorteada e exibida uma unica vez, na criacao.
+
+    O dono repassa pelo canal que quiser e o novo usuario troca no primeiro
+    acesso. Assim o dono nunca escolhe a senha de outra pessoa -- e portanto
+    nunca fica sabendo dela depois da primeira troca.
+    """
+
+    senha_inicial: str = Field(repr=False)
+
+
+class UsuarioPatch(BaseModel):
+    papel: str | None = None
+    ativo: bool | None = None
+
+    @field_validator("papel")
+    @classmethod
+    def _papel_valido(cls, v: str | None) -> str | None:
+        from app.models import PAPEIS
+
+        if v is not None and v not in PAPEIS:
+            raise ValueError(f"papel deve ser um de {PAPEIS}")
+        return v
 
 
 class ChaveGatewayIn(BaseModel):

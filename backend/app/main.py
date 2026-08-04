@@ -85,7 +85,7 @@ app.add_middleware(
     # pelo navegador, e com regex frouxa vira roubo de sessao.
     allow_origins=settings.cors_origins,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", CABECALHO_CSRF, CABECALHO_CHAVE],
     max_age=600,
 )

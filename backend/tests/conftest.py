@@ -38,7 +38,7 @@ from sqlalchemy import create_engine, func, text  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
 from app.config import settings  # noqa: E402
-from app.database import Base, SessionLocal, engine, get_db  # noqa: E402
+from app.database import Base, SessionLocal, criar_schema_direto, engine, get_db  # noqa: E402
 from app.main import app  # noqa: E402
 from app.models import (  # noqa: E402
     PAPEL_DONO,
@@ -88,7 +88,7 @@ def schema():
     with engine.begin() as conn:
         conn.execute(text("CREATE EXTENSION IF NOT EXISTS postgis"))
     Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
+    criar_schema_direto()
     yield
     Base.metadata.drop_all(bind=engine)
 
