@@ -45,8 +45,9 @@ class TestLogin:
         assert "HttpOnly" not in csrf
 
     def test_email_normalizado(self, cliente, dono):
+        """Cadastro em minúsculas, login em maiúsculas: tem de entrar."""
         resposta = cliente.post(
-            "/api/auth/login", json={"email": "DONO@TESTE.LOCAL", "senha": SENHA_TESTE}
+            "/api/auth/login", json={"email": "DONO@TESTE.COM.BR", "senha": SENHA_TESTE}
         )
         assert resposta.status_code == 200
 
@@ -62,7 +63,7 @@ class TestLogin:
             "/api/auth/login", json={"email": dono.email, "senha": "senha-que-nao-e-essa"}
         )
         inexistente = cliente.post(
-            "/api/auth/login", json={"email": "ninguem@teste.local", "senha": SENHA_TESTE}
+            "/api/auth/login", json={"email": "ninguem@teste.com.br", "senha": SENHA_TESTE}
         )
 
         assert errada.status_code == inexistente.status_code == 401
@@ -94,10 +95,12 @@ class TestBloqueio:
     def test_bloqueio_vale_para_email_inexistente(self, cliente, dono):
         """Senão o contador denunciaria quais e-mails existem."""
         for _ in range(settings.login_max_tentativas):
-            cliente.post("/api/auth/login", json={"email": "fantasma@teste.local", "senha": "x" * 12})
+            cliente.post(
+                "/api/auth/login", json={"email": "fantasma@teste.com.br", "senha": "x" * 12}
+            )
 
         resposta = cliente.post(
-            "/api/auth/login", json={"email": "fantasma@teste.local", "senha": "x" * 12}
+            "/api/auth/login", json={"email": "fantasma@teste.com.br", "senha": "x" * 12}
         )
         assert resposta.status_code == 429
 
@@ -105,14 +108,20 @@ class TestBloqueio:
         for _ in range(settings.login_max_tentativas - 1):
             cliente.post("/api/auth/login", json={"email": dono.email, "senha": "errada-mesmo"})
 
-        assert cliente.post(
-            "/api/auth/login", json={"email": dono.email, "senha": SENHA_TESTE}
-        ).status_code == 200
+        assert (
+            cliente.post(
+                "/api/auth/login", json={"email": dono.email, "senha": SENHA_TESTE}
+            ).status_code
+            == 200
+        )
 
         # Contador zerado: erra de novo e ainda não bloqueia.
-        assert cliente.post(
-            "/api/auth/login", json={"email": dono.email, "senha": "errada-mesmo"}
-        ).status_code == 401
+        assert (
+            cliente.post(
+                "/api/auth/login", json={"email": dono.email, "senha": "errada-mesmo"}
+            ).status_code
+            == 401
+        )
 
 
 class TestRotacao:
@@ -135,9 +144,7 @@ class TestRotacao:
 
     def test_refresh_com_csrf_errado_e_recusado(self, cliente, dono):
         entrar(cliente, dono.email)
-        resposta = cliente.post(
-            "/api/auth/refresh", headers={"X-CSRF-Token": "valor-inventado"}
-        )
+        resposta = cliente.post("/api/auth/refresh", headers={"X-CSRF-Token": "valor-inventado"})
         assert resposta.status_code == 403
 
     def test_reuso_revoga_a_familia(self, cliente, db, dono):
@@ -147,19 +154,40 @@ class TestRotacao:
         csrf = cliente.cookies.get(settings.cookie_csrf_nome)
 
         # Uso legítimo: rotaciona.
-        assert cliente.post("/api/auth/refresh", headers={"X-CSRF-Token": csrf}).status_code == 200
+        assert (
+            cliente.post("/api/auth/refresh", headers={"X-CSRF-Token": csrf}).status_code == 200
+        )
 
         # O ladrão tenta com a cópia antiga.
-        cliente.cookies.set(settings.cookie_refresh_nome, roubado)
-        resposta = cliente.post("/api/auth/refresh", headers={"X-CSRF-Token": csrf})
+        #
+        # O cookie vai no header, montado à mão, e não pelo jar do cliente: o
+        # cookie de refresh tem Path=/api/auth, e mexer no jar fazia o cookie
+        # simplesmente não ser enviado. O servidor então respondia 401 por
+        # "sem cookie" — o mesmo status do reuso — e o teste passava pelo
+        # motivo errado, sem nunca exercitar a detecção.
+        cliente.cookies.clear()
+        resposta = cliente.post(
+            "/api/auth/refresh",
+            headers={
+                "X-CSRF-Token": csrf,
+                "Cookie": (
+                    f"{settings.cookie_refresh_nome}={roubado}; "
+                    f"{settings.cookie_csrf_nome}={csrf}"
+                ),
+            },
+        )
 
         assert resposta.status_code == 401
 
-        abertas = db.execute(
-            select(SessaoRefresh).where(
-                SessaoRefresh.usuario_id == dono.id, SessaoRefresh.revogada_em.is_(None)
+        abertas = (
+            db.execute(
+                select(SessaoRefresh).where(
+                    SessaoRefresh.usuario_id == dono.id, SessaoRefresh.revogada_em.is_(None)
+                )
             )
-        ).scalars().all()
+            .scalars()
+            .all()
+        )
         assert abertas == [], "toda a família deveria estar revogada"
 
     def test_refresh_sem_cookie(self, cliente, dono):
@@ -172,9 +200,11 @@ class TestLogout:
 
         assert cliente.post("/api/auth/logout").status_code == 204
 
-        abertas = db.execute(
-            select(SessaoRefresh).where(SessaoRefresh.revogada_em.is_(None))
-        ).scalars().all()
+        abertas = (
+            db.execute(select(SessaoRefresh).where(SessaoRefresh.revogada_em.is_(None)))
+            .scalars()
+            .all()
+        )
         assert abertas == []
 
     def test_funciona_sem_access_token(self, cliente, dono):
@@ -201,9 +231,12 @@ class TestTrocaDeSenha:
         assert cliente.get("/api/animais", headers=auth(token)).status_code == 401
 
         # E a senha nova funciona.
-        assert cliente.post(
-            "/api/auth/login", json={"email": dono.email, "senha": self.NOVA}
-        ).status_code == 200
+        assert (
+            cliente.post(
+                "/api/auth/login", json={"email": dono.email, "senha": self.NOVA}
+            ).status_code
+            == 200
+        )
 
     def test_revoga_todas_as_sessoes(self, cliente, db, dono):
         token = entrar(cliente, dono.email)
@@ -213,9 +246,11 @@ class TestTrocaDeSenha:
             json={"senha_atual": SENHA_TESTE, "senha_nova": self.NOVA},
         )
 
-        abertas = db.execute(
-            select(SessaoRefresh).where(SessaoRefresh.revogada_em.is_(None))
-        ).scalars().all()
+        abertas = (
+            db.execute(select(SessaoRefresh).where(SessaoRefresh.revogada_em.is_(None)))
+            .scalars()
+            .all()
+        )
         assert abertas == []
 
     def test_senha_atual_errada(self, cliente, dono):

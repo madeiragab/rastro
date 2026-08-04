@@ -40,7 +40,9 @@ def _agora() -> dt.datetime:
 
 
 # --------------------------------------------------------------- access token
-def criar_access_token(usuario_id: int, papel: str, fazenda_id: int | None) -> tuple[str, int]:
+def criar_access_token(
+    usuario_id: int, papel: str, fazenda_id: int | None, versao: int = 0
+) -> tuple[str, int]:
     """Devolve `(token, segundos_ate_expirar)`."""
     emitido = _agora()
     expira = emitido + dt.timedelta(minutes=settings.access_token_ttl_min)
@@ -49,6 +51,9 @@ def criar_access_token(usuario_id: int, papel: str, fazenda_id: int | None) -> t
         "sub": str(usuario_id),
         "papel": papel,
         "fazenda": fazenda_id,
+        # Versao da credencial. Trocar a senha incrementa e derruba todo token
+        # emitido antes, sem depender da resolucao de 1 segundo do `iat`.
+        "ver": versao,
         "tipo": TIPO_ACESSO,
         "iss": settings.jwt_emissor,
         "aud": settings.jwt_audiencia,

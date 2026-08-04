@@ -11,7 +11,10 @@ import pytest
 
 from app.main import app
 from app.models import PAPEL_LEITURA, PAPEL_OPERADOR
-from tests.conftest import SENHA_TESTE, auth, criar_usuario, entrar
+from tests.conftest import auth, criar_usuario, entrar
+
+EMAIL_LEITOR = "leitor@teste.com.br"
+EMAIL_OPERADOR = "operador@teste.com.br"
 
 # Únicas rotas que podem responder sem credencial.
 PUBLICAS = {
@@ -63,8 +66,8 @@ class TestSuperficie:
 
 class TestPapeis:
     def test_leitura_nao_cria_pasto(self, cliente, db, fazenda):
-        criar_usuario(db, fazenda, email="leitor@teste.local", papel=PAPEL_LEITURA)
-        token = entrar(cliente, "leitor@teste.local")
+        criar_usuario(db, fazenda, email=EMAIL_LEITOR, papel=PAPEL_LEITURA)
+        token = entrar(cliente, EMAIL_LEITOR)
 
         resposta = cliente.post(
             "/api/pastos",
@@ -79,20 +82,20 @@ class TestPapeis:
         assert resposta.status_code == 403
 
     def test_leitura_ve_animais(self, cliente, db, fazenda, animal):
-        criar_usuario(db, fazenda, email="leitor@teste.local", papel=PAPEL_LEITURA)
-        token = entrar(cliente, "leitor@teste.local")
+        criar_usuario(db, fazenda, email=EMAIL_LEITOR, papel=PAPEL_LEITURA)
+        token = entrar(cliente, EMAIL_LEITOR)
 
         assert cliente.get("/api/animais", headers=auth(token)).status_code == 200
 
     def test_operador_nao_gerencia_chaves(self, cliente, db, fazenda):
-        criar_usuario(db, fazenda, email="operador@teste.local", papel=PAPEL_OPERADOR)
-        token = entrar(cliente, "operador@teste.local")
+        criar_usuario(db, fazenda, email=EMAIL_OPERADOR, papel=PAPEL_OPERADOR)
+        token = entrar(cliente, EMAIL_OPERADOR)
 
         assert cliente.get("/api/gateways", headers=auth(token)).status_code == 403
 
     def test_operador_cria_pasto(self, cliente, db, fazenda):
-        criar_usuario(db, fazenda, email="operador@teste.local", papel=PAPEL_OPERADOR)
-        token = entrar(cliente, "operador@teste.local")
+        criar_usuario(db, fazenda, email=EMAIL_OPERADOR, papel=PAPEL_OPERADOR)
+        token = entrar(cliente, EMAIL_OPERADOR)
 
         resposta = cliente.post(
             "/api/pastos",
@@ -109,9 +112,7 @@ class TestPapeis:
     def test_dono_gerencia_chaves(self, cliente, dono):
         token = entrar(cliente, dono.email)
 
-        criada = cliente.post(
-            "/api/gateways", headers=auth(token), json={"nome": "Sede"}
-        )
+        criada = cliente.post("/api/gateways", headers=auth(token), json={"nome": "Sede"})
         assert criada.status_code == 201
         # A chave completa aparece uma única vez, aqui.
         assert criada.json()["chave"].startswith("rastro_gw_")

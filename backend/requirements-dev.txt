@@ -1,4 +1,8 @@
 -r requirements.txt
 
 pytest>=8.3,<9.0
-httpx>=0.27,<1.0
+
+# httpx2, e nao httpx: o TestClient do Starlette passou a exigir a versao 2 e
+# emite DeprecationWarning com a antiga -- que o filtro do pytest.ini
+# transforma em erro, de proposito.
+httpx2>=0.28

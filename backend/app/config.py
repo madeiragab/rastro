@@ -99,7 +99,9 @@ class Settings(BaseSettings):
     # ----------------------------------------------------- conta inicial
     # Usada apenas na carga de demonstracao. Em producao, criar a conta por
     # fora e nunca versionar a senha.
-    admin_email: str = "produtor@rastro.local"
+    # Domínio real de propósito: `.local` é reservado (RFC 6762) e validadores
+    # de e-mail o recusam, o que tornaria a conta semeada impossível de usar.
+    admin_email: str = "produtor@rastro.com.br"
     admin_senha: str = Field(default="", repr=False)
 
     # ------------------------------------------------------------ validacao
