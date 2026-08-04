@@ -1,0 +1,50 @@
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: rastro-db
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-rastro}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rastro}
+      POSTGRES_DB: ${POSTGRES_DB:-rastro}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - rastro_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-rastro} -d ${POSTGRES_DB:-rastro}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  api:
+    build: ./backend
+    container_name: rastro-api
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-rastro}:${POSTGRES_PASSWORD:-rastro}@db:5432/${POSTGRES_DB:-rastro}
+      CORS_ORIGINS: '["http://localhost:5173","http://127.0.0.1:5173"]'
+      SIMULATOR_ENABLED: "true"
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "${API_PORT:-8000}:8000"
+    volumes:
+      - ./backend/app:/code/app
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  web:
+    build: ./frontend
+    container_name: rastro-web
+    environment:
+      API_PROXY_TARGET: http://api:8000
+    depends_on:
+      - api
+    ports:
+      - "${WEB_PORT:-5173}:5173"
+    volumes:
+      - ./frontend/src:/app/src
+      - ./frontend/public:/app/public
+      - ./frontend/index.html:/app/index.html
+
+volumes:
+  rastro_pgdata:

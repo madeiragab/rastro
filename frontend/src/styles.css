@@ -1,0 +1,659 @@
+/* Rastro — mobile-first.
+   O mapa ocupa a tela inteira e tudo mais flutua sobre ele. A folha inferior
+   e o modo de navegacao principal: o polegar alcanca, e o mapa nunca some. */
+
+:root {
+  --verde: #2e9e63;
+  --vermelho: #d64545;
+  --laranja: #e0821a;
+  --cinza: #7b8794;
+
+  --fundo: #0f1417;
+  --painel: #171e22;
+  --painel-2: #1e262b;
+  --borda: #2a343a;
+  --texto: #e6edf1;
+  --texto-fraco: #93a1ac;
+
+  --topo-seguro: env(safe-area-inset-top, 0px);
+  --base-segura: env(safe-area-inset-bottom, 0px);
+
+  --raio: 14px;
+  --toque: 44px; /* alvo minimo de toque */
+
+  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  color-scheme: dark;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  overscroll-behavior: none;
+}
+
+body {
+  background: var(--fundo);
+  color: var(--texto);
+  font-size: 15px;
+}
+
+button {
+  font-family: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+
+/* ==================================================================== base */
+.app {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+}
+
+.mapa-fundo {
+  position: absolute;
+  inset: 0;
+}
+
+.leaflet-container {
+  height: 100%;
+  width: 100%;
+  background: #10171b;
+  font-family: inherit;
+}
+
+/* controles do Leaflet fora do caminho do polegar e da barra de topo */
+.leaflet-control-zoom {
+  display: none;
+}
+
+.leaflet-control-attribution {
+  background: rgba(15, 20, 23, 0.72) !important;
+  color: var(--texto-fraco) !important;
+  font-size: 9px !important;
+}
+
+.leaflet-control-attribution a {
+  color: var(--cinza) !important;
+}
+
+/* =============================================================== barra topo */
+.barra-topo {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 600;
+  padding: calc(var(--topo-seguro) + 10px) 12px 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: linear-gradient(
+    to bottom,
+    rgba(15, 20, 23, 0.94) 0%,
+    rgba(15, 20, 23, 0.82) 62%,
+    rgba(15, 20, 23, 0) 100%
+  );
+  pointer-events: none;
+}
+
+.barra-topo > * {
+  pointer-events: auto;
+}
+
+.marca {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  min-width: 0;
+}
+
+.marca-nome {
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1;
+}
+
+.marca-nome span {
+  color: var(--verde);
+}
+
+.marca-fazenda {
+  font-size: 11px;
+  color: var(--texto-fraco);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pulso {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--texto-fraco);
+  background: rgba(23, 30, 34, 0.9);
+  border: 1px solid var(--borda);
+  border-radius: 999px;
+  padding: 5px 10px;
+  white-space: nowrap;
+}
+
+.pulso i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--verde);
+  animation: pulsar 2s infinite;
+}
+
+.pulso.off i {
+  background: var(--vermelho);
+  animation: none;
+}
+
+@keyframes pulsar {
+  0% {
+    box-shadow: 0 0 0 0 rgba(46, 158, 99, 0.5);
+  }
+  70% {
+    box-shadow: 0 0 0 6px rgba(46, 158, 99, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(46, 158, 99, 0);
+  }
+}
+
+/* ============================================================ acoes do mapa */
+.acoes-mapa {
+  position: absolute;
+  right: 12px;
+  z-index: 550;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fab {
+  width: var(--toque);
+  height: var(--toque);
+  border-radius: 50%;
+  background: var(--painel);
+  border: 1px solid var(--borda);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  display: grid;
+  place-items: center;
+  font-size: 19px;
+  padding: 0;
+}
+
+.fab:active {
+  background: var(--painel-2);
+}
+
+.fab.destaque {
+  background: var(--verde);
+  border-color: var(--verde);
+  color: #07120c;
+}
+
+/* ================================================================= desenho */
+.painel-desenho {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  z-index: 620;
+  background: var(--painel);
+  border: 1px solid var(--verde);
+  border-radius: var(--raio);
+  padding: 12px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.painel-desenho-texto {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--texto-fraco);
+}
+
+.painel-desenho-texto strong {
+  color: var(--texto);
+}
+
+.painel-desenho-linha {
+  display: flex;
+  gap: 8px;
+}
+
+.campo {
+  flex: 1;
+  min-width: 0;
+  background: var(--painel-2);
+  border: 1px solid var(--borda);
+  border-radius: 10px;
+  padding: 0 12px;
+  height: var(--toque);
+  color: var(--texto);
+  font-size: 16px; /* 16px evita o zoom automatico do iOS ao focar */
+  font-family: inherit;
+}
+
+.campo:focus {
+  outline: none;
+  border-color: var(--verde);
+}
+
+.botao {
+  height: var(--toque);
+  padding: 0 16px;
+  background: var(--painel-2);
+  border: 1px solid var(--borda);
+  border-radius: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.botao.primario {
+  background: var(--verde);
+  border-color: var(--verde);
+  color: #07120c;
+  font-weight: 700;
+}
+
+.botao:disabled {
+  opacity: 0.4;
+}
+
+/* ========================================================== folha inferior */
+.folha {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 700;
+  height: 88%;
+  background: var(--painel);
+  border-top: 1px solid var(--borda);
+  border-radius: 18px 18px 0 0;
+  box-shadow: 0 -8px 30px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  touch-action: none;
+  will-change: transform;
+}
+
+.folha.animada {
+  transition: transform 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
+.folha-alca {
+  padding: 9px 0 5px;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  cursor: grab;
+}
+
+.folha-alca::before {
+  content: "";
+  width: 38px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--borda);
+}
+
+/* faixa compacta visivel quando a folha esta recolhida */
+.folha-resumo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 14px 10px;
+  flex-shrink: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.folha-resumo::-webkit-scrollbar {
+  display: none;
+}
+
+.pilula {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
+  background: var(--painel-2);
+  border: 1px solid var(--borda);
+  border-left-width: 3px;
+  border-radius: 9px;
+  padding: 7px 11px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.pilula b {
+  font-size: 17px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+
+.pilula span {
+  font-size: 11px;
+  color: var(--texto-fraco);
+}
+
+.pilula.ok {
+  border-left-color: var(--verde);
+}
+.pilula.alerta {
+  border-left-color: var(--vermelho);
+}
+.pilula.aviso {
+  border-left-color: var(--laranja);
+}
+.pilula.neutro {
+  border-left-color: var(--cinza);
+}
+
+/* abas */
+.folha-abas {
+  display: flex;
+  gap: 4px;
+  padding: 0 10px;
+  border-bottom: 1px solid var(--borda);
+  flex-shrink: 0;
+}
+
+.aba {
+  flex: 1;
+  height: var(--toque);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--texto-fraco);
+  font-size: 13px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.aba.ativa {
+  color: var(--texto);
+  border-bottom-color: var(--verde);
+}
+
+.selo {
+  background: var(--vermelho);
+  color: #fff;
+  border-radius: 999px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  font-size: 11px;
+  font-weight: 700;
+  display: grid;
+  place-items: center;
+}
+
+.folha-conteudo {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding-bottom: calc(var(--base-segura) + 16px);
+}
+
+/* ================================================================== listas */
+.linha-animal {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  min-height: 56px;
+  padding: 10px 14px;
+  border: none;
+  border-bottom: 1px solid var(--borda);
+  border-left: 3px solid transparent;
+  background: none;
+  text-align: left;
+  font-size: 14px;
+}
+
+.linha-animal.ativa {
+  background: var(--painel-2);
+  border-left-color: var(--verde);
+}
+
+.ponto-status {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.linha-animal-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.linha-animal-nome {
+  font-weight: 600;
+}
+
+.linha-animal-meta {
+  font-size: 12px;
+  color: var(--texto-fraco);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bateria {
+  font-size: 12px;
+  color: var(--texto-fraco);
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+
+.bateria.baixa {
+  color: var(--laranja);
+}
+
+/* ================================================================= alertas */
+.alerta {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 13px 14px;
+  border-bottom: 1px solid var(--borda);
+  border-left: 3px solid var(--vermelho);
+}
+
+.alerta.media {
+  border-left-color: var(--cinza);
+}
+.alerta.critica {
+  border-left-color: var(--laranja);
+}
+
+.alerta-corpo {
+  flex: 1;
+  min-width: 0;
+}
+
+.alerta-tipo {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--texto-fraco);
+}
+
+.alerta-msg {
+  margin: 3px 0 6px;
+  line-height: 1.4;
+  font-size: 14px;
+}
+
+.alerta-rodape {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--texto-fraco);
+}
+
+.botao-mini {
+  background: var(--painel-2);
+  border: 1px solid var(--borda);
+  border-radius: 8px;
+  padding: 7px 11px;
+  font-size: 12px;
+  color: var(--texto-fraco);
+  white-space: nowrap;
+}
+
+.botao-mini:active {
+  border-color: var(--verde);
+  color: var(--texto);
+}
+
+.vazio {
+  padding: 34px 18px;
+  text-align: center;
+  color: var(--texto-fraco);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* =============================================================== simulacao */
+.bloco {
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+  border-bottom: 1px solid var(--borda);
+}
+
+.bloco-titulo {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--texto-fraco);
+}
+
+.grade-cenarios {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.botao-cenario {
+  min-height: var(--toque);
+  background: var(--painel-2);
+  border: 1px solid var(--borda);
+  border-radius: 10px;
+  font-size: 13px;
+  padding: 8px;
+}
+
+.botao-cenario.ativo {
+  border-color: var(--verde);
+  background: rgba(46, 158, 99, 0.16);
+}
+
+.botao-cenario:disabled {
+  opacity: 0.4;
+}
+
+.dica {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--texto-fraco);
+}
+
+.erro {
+  margin: 12px 14px;
+  background: rgba(214, 69, 69, 0.12);
+  border: 1px solid var(--vermelho);
+  border-radius: 10px;
+  padding: 11px 13px;
+  font-size: 13px;
+  color: #ffb4b4;
+  word-break: break-word;
+}
+
+/* ============================================================== marcadores */
+.leaflet-popup-content-wrapper,
+.leaflet-popup-tip {
+  background: var(--painel);
+  color: var(--texto);
+  border: 1px solid var(--borda);
+}
+
+.leaflet-popup-content {
+  margin: 11px 13px;
+  line-height: 1.5;
+}
+
+.popup-titulo {
+  font-weight: 700;
+  margin-bottom: 3px;
+}
+
+.popup-linha {
+  font-size: 12px;
+  color: var(--texto-fraco);
+}
+
+/* ================================================================ desktop  */
+/* A partir de tablet a folha vira painel lateral fixo. O `!important` e
+   necessario para vencer o transform inline do arrasto. */
+@media (min-width: 900px) {
+  .folha {
+    top: 0;
+    bottom: 0;
+    left: 0;
+    right: auto;
+    width: 390px;
+    height: 100%;
+    border-radius: 0;
+    border-top: none;
+    border-right: 1px solid var(--borda);
+    transform: none !important;
+    transition: none !important;
+    padding-top: calc(var(--topo-seguro) + 62px);
+  }
+
+  .folha-alca {
+    display: none;
+  }
+
+  .barra-topo {
+    padding-left: 402px;
+  }
+
+  .acoes-mapa {
+    right: 16px;
+  }
+
+  .painel-desenho {
+    left: 402px;
+    right: 16px;
+  }
+}

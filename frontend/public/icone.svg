@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <rect width="192" height="192" rx="42" fill="#0F1417"/>
+  <!-- trilha: o rastro que o animal deixa -->
+  <path d="M44 140 C 68 120, 62 92, 86 76 S 128 60, 148 48"
+        fill="none" stroke="#2E9E63" stroke-width="9"
+        stroke-linecap="round" stroke-dasharray="2 22"/>
+  <circle cx="44" cy="140" r="9" fill="#2E9E63" opacity="0.45"/>
+  <circle cx="148" cy="48" r="15" fill="#2E9E63"/>
+  <circle cx="148" cy="48" r="27" fill="none" stroke="#2E9E63" stroke-width="5" opacity="0.5"/>
+</svg>
