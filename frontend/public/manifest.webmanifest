@@ -1,0 +1,19 @@
+{
+  "name": "Rastro — rastreamento de rebanho",
+  "short_name": "Rastro",
+  "description": "Rastreamento em tempo real e geocerca para rebanho bovino.",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f1417",
+  "theme_color": "#0f1417",
+  "lang": "pt-BR",
+  "icons": [
+    {
+      "src": "/icone.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
