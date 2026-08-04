@@ -1,0 +1,28 @@
+# Build da SPA e entrega por nginx.
+#
+# O `npm run dev` do Vite NAO vai para producao: ele e um servidor de
+# desenvolvimento, sem cache, sem compressao e com o proprio aviso de que nao
+# deve ser exposto.
+
+FROM node:20-alpine AS build
+
+WORKDIR /app
+
+COPY package.json package-lock.json* ./
+# `npm ci` respeita o lockfile; `npm install` pode resolver versoes diferentes
+# das que foram testadas.
+RUN npm ci
+
+COPY . .
+RUN npm run build
+
+
+FROM nginx:1.27-alpine
+
+COPY --from=build /app/dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+
+EXPOSE 80
+
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s \
+    CMD wget -qO- http://localhost/ >/dev/null 2>&1 || exit 1
