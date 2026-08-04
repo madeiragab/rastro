@@ -1,0 +1,101 @@
+# Produção.
+#
+#   docker compose -f docker-compose.prod.yml --env-file .env.production up -d
+#
+# Diferenças em relação ao compose de desenvolvimento, e o porquê de cada uma:
+#
+#   - sem bind mount de código: o container roda o que foi construído, não o que
+#     está no disco da máquina;
+#   - sem --reload e com múltiplos workers;
+#   - simulador desligado (a configuração se recusa a subir com ele ligado);
+#   - banco sem porta publicada — só a rede interna alcança;
+#   - Caddy com Let's Encrypt de verdade;
+#   - frontend servido por nginx a partir do build, não pelo dev server do Vite.
+
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./backups:/backups
+    # Nenhuma porta publicada: o banco só é alcançável pela rede do compose.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    environment:
+      AMBIENTE: producao
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      SECRET_KEY: ${SECRET_KEY}
+      COOKIE_SECURE: "true"
+      SIMULATOR_ENABLED: "false"
+      APP_URL: https://${DOMINIO}
+      CORS_ORIGINS: '["https://${DOMINIO}"]'
+      ADMIN_EMAIL: ${ADMIN_EMAIL}
+      ADMIN_SENHA: ${ADMIN_SENHA}
+      SMTP_HOST: ${SMTP_HOST}
+      SMTP_PORTA: ${SMTP_PORTA:-587}
+      SMTP_USUARIO: ${SMTP_USUARIO}
+      SMTP_SENHA: ${SMTP_SENHA}
+      SMTP_REMETENTE: ${SMTP_REMETENTE}
+      SMTP_SEGURANCA: ${SMTP_SEGURANCA:-starttls}
+    depends_on:
+      db:
+        condition: service_healthy
+    # 2 workers: o simulador e o despachante de push rodam por processo, então
+    # cada worker teria a própria cópia. Com 2 é aceitável (push é idempotente
+    # pela marca no alerta); acima disso, mover as tarefas para um serviço
+    # separado antes de aumentar.
+    command: >
+      uvicorn app.main:app
+      --host 0.0.0.0 --port 8000
+      --workers 2
+      --no-server-header
+      --proxy-headers --forwarded-allow-ips=*
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://localhost:8000/health')\""]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.prod
+    restart: unless-stopped
+    depends_on:
+      - api
+
+  proxy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      DOMINIO: ${DOMINIO}
+      ACME_EMAIL: ${ACME_EMAIL}
+    depends_on:
+      - api
+      - web
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./Caddyfile.prod:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+
+volumes:
+  pgdata:
+  caddy_data:
+  caddy_config:

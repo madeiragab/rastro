@@ -66,6 +66,20 @@ class Settings(BaseSettings):
     # Base para montar o link. Em producao, o dominio publico do app.
     app_url: str = "http://localhost:5173"
 
+    # ------------------------------------------------------------ e-mail
+    # Sem host configurado, a entrega cai no adaptador de log -- util em
+    # desenvolvimento, inutil em producao. O validador abaixo recusa subir em
+    # producao sem SMTP: recuperacao de senha que nao chega e conta perdida.
+    smtp_host: str = ""
+    smtp_porta: int = 587
+    smtp_usuario: str = ""
+    smtp_senha: str = Field(default="", repr=False)
+    smtp_remetente: str = "Rastro <nao-responda@rastro.com.br>"
+    # "starttls" (587, o mais comum), "ssl" (465) ou "nenhuma" (so em rede
+    # interna confiavel -- credencial de SMTP em texto claro na rede e ruim).
+    smtp_seguranca: str = "starttls"
+    smtp_timeout_s: int = 15
+
     # ---------------------------------------------- protecao contra forca bruta
     login_max_tentativas: int = 5
     login_janela_min: int = 15
@@ -129,6 +143,13 @@ class Settings(BaseSettings):
                 raise RuntimeError("CORS_ORIGINS contem origem http:// nao-local em producao.")
             if self.simulator_enabled:
                 raise RuntimeError("SIMULATOR_ENABLED precisa ser false em producao.")
+            if not self.smtp_host:
+                raise RuntimeError(
+                    "SMTP_HOST ausente. Sem envio de e-mail, quem esquecer a senha "
+                    "perde a conta -- o link de redefinicao iria para o log do servidor."
+                )
+            if self.app_url.startswith("http://"):
+                raise RuntimeError("APP_URL precisa ser https:// em producao.")
         elif self.secret_key == SEGREDO_DEV:
             log.warning(
                 "usando SECRET_KEY de desenvolvimento -- tokens sao forjaveis. "

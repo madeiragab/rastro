@@ -8,6 +8,7 @@
 | [Architecture](architecture.md) | Context and container diagrams, ER model, telemetry and auth sequence diagrams, alert state machine, layering, known limits |
 | [Security](security.md) | Threat model, STRIDE, every implemented control with its rationale, and an honest list of what is **not** protected |
 | [Decision log](decisions.md) | 16 ADRs: what was decided, what was rejected, and why |
+| [Deployment](deploy.md) | Going live on a Linux server: domain, TLS, SMTP, backups, updates — and what is still missing to call it mature infrastructure |
 
 Start from the [root README](../README.md) for setup and demo instructions.
 

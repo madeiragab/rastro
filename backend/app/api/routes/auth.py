@@ -16,7 +16,16 @@ from __future__ import annotations
 
 import datetime as dt
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    Header,
+    HTTPException,
+    Request,
+    Response,
+    status,
+)
 from sqlalchemy import func, select, update
 from sqlalchemy.orm import Session
 
@@ -270,6 +279,7 @@ def logout(request: Request, resposta: Response, db: Session = Depends(get_db)) 
 def esqueci_senha(
     payload: EsqueciSenhaIn,
     request: Request,
+    tarefas: BackgroundTasks,
     db: Session = Depends(get_db),
 ) -> dict[str, str]:
     """Solicita um link de redefinicao.
@@ -317,7 +327,11 @@ def esqueci_senha(
     auditoria.registrar(db, auditoria.SENHA_RESET_SOLICITADO, usuario_id=usuario.id, ip=ip)
     db.commit()
 
-    notificacao.enviar_link_de_reset(
+    # Em tarefa de fundo: o handshake TLS mais a latência do provedor levam
+    # segundos. Além de não prender a requisição, isso impede que o tempo de
+    # resposta denuncie se a conta existe.
+    tarefas.add_task(
+        notificacao.enviar_link_de_reset,
         usuario.email,
         f"{settings.app_url}/redefinir?token={claro}",
         settings.reset_token_ttl_min,

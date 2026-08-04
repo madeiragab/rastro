@@ -1,0 +1,42 @@
+# Proxy de produção.
+#
+# O Caddy obtém e renova o certificado do Let's Encrypt sozinho — só precisa que
+# o domínio aponte para esta máquina e que as portas 80 e 443 estejam abertas.
+
+{
+	email {$ACME_EMAIL}
+	admin off
+}
+
+{$DOMINIO} {
+	# A API vem primeiro: o roteamento é por especificidade e o bloco genérico
+	# capturaria /api também.
+	handle /api/* {
+		reverse_proxy api:8000
+	}
+
+	handle /health {
+		reverse_proxy api:8000
+	}
+
+	handle {
+		reverse_proxy web:80
+	}
+
+	encode gzip zstd
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+
+	log {
+		output stdout
+		# Sem corpo e sem query string: o token de redefinição de senha viaja
+		# na URL, e log de acesso costuma sair da máquina.
+		format console
+	}
+}

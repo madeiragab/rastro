@@ -8,6 +8,7 @@
 | [Arquitetura](arquitetura.md) | Diagramas de contexto e containers, modelo ER, sequência de telemetria e autenticação, máquina de estados do alerta, camadas, limites conhecidos |
 | [Segurança](seguranca.md) | Modelo de ameaça, STRIDE, cada controle implementado com o motivo, e a lista honesta do que **não** está protegido |
 | [Registro de decisões](decisoes.md) | 16 ADRs: o que foi decidido, o que foi descartado, e por quê |
+| [Implantação](implantacao.md) | Colocar no ar num servidor Linux: domínio, TLS, SMTP, backup, atualização — e o que ainda falta para ser infraestrutura madura |
 
 Comece pelo [README da raiz](../README.pt-BR.md) para instruções de execução e
 demonstração.
