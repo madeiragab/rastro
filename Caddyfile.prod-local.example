@@ -1,0 +1,33 @@
+# Igual ao Caddyfile.prod, trocando apenas o certificado: `tls internal` usa
+# uma autoridade local, porque o Let's Encrypt não emite para localhost.
+#
+# Copiado para Caddyfile.prod-local pelo docker-compose.prod-local.yml.
+
+{
+	admin off
+}
+
+localhost {
+	tls internal
+
+	handle /api/* {
+		reverse_proxy api:8000
+	}
+
+	handle /health* {
+		reverse_proxy api:8000
+	}
+
+	handle {
+		reverse_proxy web:80
+	}
+
+	encode gzip zstd
+
+	header {
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "no-referrer"
+		-Server
+	}
+}

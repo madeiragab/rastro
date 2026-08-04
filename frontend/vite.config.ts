@@ -12,7 +12,8 @@ export default defineConfig({
     watch: { usePolling: true },
     proxy: {
       "/api": { target, changeOrigin: true },
-      "/health": { target, changeOrigin: true },
+      // Prefixo, para /health/pronto também ir para a API.
+      "^/health": { target, changeOrigin: true },
     },
   },
 });

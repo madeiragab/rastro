@@ -1,5 +1,7 @@
 .env
 .env.production
+.env.production.local
+Caddyfile.prod-local
 backups/
 *.pyc
 __pycache__/

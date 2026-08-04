@@ -64,7 +64,9 @@ services:
       --no-server-header
       --proxy-headers --forwarded-allow-ips=*
     healthcheck:
-      test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://localhost:8000/health')\""]
+      # Prontidão, não vivacidade: precisa falhar quando o banco cai, senão o
+      # container aparece saudável enquanto toda rota devolve erro.
+      test: ["CMD-SHELL", "python -c \"import urllib.request;urllib.request.urlopen('http://localhost:8000/health/pronto')\""]
       interval: 30s
       timeout: 5s
       retries: 3
