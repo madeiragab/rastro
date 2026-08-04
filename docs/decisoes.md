@@ -204,3 +204,25 @@ WebSocket mal reconectado é pior que polling.
 
 **Consequência:** tráfego constante e latência de até 3 s. Trocar quando o número
 de clientes justificar, não antes.
+
+---
+
+## ADR-013 — Contador de versão para invalidar token, não carimbo de tempo
+
+**Situação:** trocar a senha precisa derrubar todo access token já emitido.
+
+**Primeira tentativa:** comparar o `iat` do JWT com `senha_alterada_em` do
+usuário. Token emitido antes da troca é recusado.
+
+**Por que estava errado:** os dois valores têm resolução de **um segundo**.
+Trocar a senha no mesmo segundo em que o token foi emitido deixava o token
+anterior válido — e essa é exatamente a situação de quem acaba de descobrir a
+invasão e corre para trocar a senha. A janela é pequena, mas está no pior
+momento possível.
+
+**Decisão:** contador `token_versao` no usuário, enviado no token como claim
+`ver` e comparado por igualdade. Trocar a senha incrementa.
+
+**Consequência:** sem granularidade, sem relógio, sem janela. Custa uma coluna
+`integer` e uma comparação. Quem encontrou o problema foi a suíte de testes, na
+primeira execução real — não a revisão de código, que leu o `<` e achou correto.

@@ -9,8 +9,11 @@ O produtor desenha o pasto no mapa e recebe alerta quando o animal **sai da áre
 
 App web mobile-first com simulador de rebanho embutido — roda sem hardware nenhum.
 
-> **Status: MVP / demonstração.** O desenho segue boas práticas correntes, mas não
-> passou por auditoria externa e **ainda não foi executado de ponta a ponta**. Ver
+> **Status: MVP / demonstração.** Roda de ponta a ponta e está verificado: 124
+> testes contra PostGIS real, mais uma passagem manual por login, rotação de
+> sessão, telemetria autenticada e o ciclo completo de alerta de geocerca. **Não**
+> passou por auditoria externa nem por teste de intrusão, e vários requisitos de
+> produção continuam faltando — ver
 > [Pendências antes de produção](#pendências-antes-de-produção).
 
 📚 **[Documentação completa](docs/README.pt-BR.md)** — [requisitos](docs/requisitos.md) ·
@@ -245,8 +248,10 @@ bovinos a partir de 2033.
   `COOKIE_SECURE=true`.
 - **Segundo fator.** Não implementado. TOTP ao menos para o papel `dono`.
 - **Recuperação de senha.** Não implementada — esqueceu, perdeu a conta.
-- **Migrações.** O schema é criado por `create_all`; mudança de schema exige
-  recriar o banco. Trocar por Alembic antes do primeiro piloto com dado real.
+- **Migrações.** O schema é criado por `create_all`, então **qualquer mudança de
+  modelo exige `docker compose down -v`** — senão a API sobe e toda consulta bate
+  numa coluna que não existe. Já aconteceu uma vez. Trocar por Alembic antes do
+  primeiro piloto com dado real.
 - **Notificação push.** Hoje o alerta só aparece dentro do painel. O push para o
   celular é a promessa central do produto e é o principal motivo do app React
   Native estar no roadmap.
@@ -287,9 +292,15 @@ pip install -r requirements-dev.txt
 pytest
 ```
 
-A suíte roda contra **PostGIS de verdade**, num banco `rastro_test` separado. A
-regra de geocerca *é* o `ST_Contains` mais distância em `geography` — testar isso
-com um dublê seria testar o dublê.
+**124 passando, 4 pulados** (os pulados são as rotas propositalmente públicas na
+varredura de autorização). A execução leva cerca de 5 minutos.
+
+A suíte roda contra **PostGIS de verdade**, num banco `rastro_test` separado que
+ela mesma cria na primeira execução. A regra de geocerca *é* o `ST_Contains` mais
+distância em `geography` — testar isso com um dublê seria testar o dublê.
+
+O custo do Argon2 é reduzido por variável de ambiente dentro do `conftest.py`. Em
+produção o custo *é* a proteção; no teste era só relógio.
 
 O que cobre:
 

@@ -7,7 +7,7 @@
 | [Requisitos](requisitos.md) | Problema, personas, requisitos funcionais e não funcionais, matriz de permissões, regras de negócio, glossário, critérios de aceite |
 | [Arquitetura](arquitetura.md) | Diagramas de contexto e containers, modelo ER, sequência de telemetria e autenticação, máquina de estados do alerta, camadas, limites conhecidos |
 | [Segurança](seguranca.md) | Modelo de ameaça, STRIDE, cada controle implementado com o motivo, e a lista honesta do que **não** está protegido |
-| [Registro de decisões](decisoes.md) | 12 ADRs: o que foi decidido, o que foi descartado, e por quê |
+| [Registro de decisões](decisoes.md) | 13 ADRs: o que foi decidido, o que foi descartado, e por quê |
 
 Comece pelo [README da raiz](../README.pt-BR.md) para instruções de execução e
 demonstração.

@@ -6,8 +6,9 @@ How Rastro defends itself, what it defends against, and — just as important �
 what it does **not** defend against.
 
 > **Notice.** This is an MVP. The design follows current good practice, but it
-> has **never been externally audited or penetration tested**, and the
-> application has not yet been run end to end. Do not treat it as hardened.
+> has **never been externally audited or penetration tested**. The controls below
+> are covered by automated tests, but tests only prove the behaviour I thought to
+> check. Do not treat it as hardened.
 
 ---
 
@@ -91,9 +92,15 @@ dictionary to walk, so a fast hash already guarantees a database dump cannot be
 turned into a valid session.
 
 **Changing the password tears everything down.** Sessions are revoked and every
-access token issued before that instant is rejected (comparing `iat` against
-`senha_alterada_em`). Someone changing their password because they suspect a
-breach expects exactly that: the intruder loses access now, not in 14 days.
+access token already issued is rejected. Someone changing their password because
+they suspect a breach expects exactly that: the intruder loses access now, not in
+14 days.
+
+The mechanism is a `token_versao` counter on the user, carried in the token as a
+`ver` claim and compared for equality. The first implementation compared the
+JWT's `iat` against `senha_alterada_em` — both at one-second resolution, so
+changing the password in the same second as a login left the previous token
+valid. A counter has no resolution to lose. The test suite caught this.
 
 ### CSRF
 

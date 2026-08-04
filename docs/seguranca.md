@@ -6,8 +6,9 @@ Como o Rastro se defende, de que se defende, e — igualmente importante — do 
 **não** se defende.
 
 > **Aviso.** Este é um projeto de MVP. O desenho segue boas práticas correntes,
-> mas **nunca passou por auditoria externa nem por teste de intrusão**, e a
-> aplicação ainda não rodou de ponta a ponta. Não trate como sistema endurecido.
+> mas **nunca passou por auditoria externa nem por teste de intrusão**. Os
+> controles abaixo têm teste automatizado, mas teste só prova o comportamento que
+> alguém pensou em verificar. Não trate como sistema endurecido.
 
 ---
 
@@ -90,10 +91,15 @@ proteger segredo de baixa entropia, que humano escolhe e atacante adivinha. Um
 token de 256 bits aleatórios não tem dicionário a percorrer — um hash rápido já
 garante que um dump do banco não vire sessão válida.
 
-**Troca de senha derruba tudo.** As sessões são revogadas e todo access token
-emitido antes daquele instante passa a ser recusado (comparação de `iat` com
-`senha_alterada_em`). Quem troca a senha por suspeita de invasão espera
+**Troca de senha derruba tudo.** As sessões são revogadas e todo access token já
+emitido passa a ser recusado. Quem troca a senha por suspeita de invasão espera
 exatamente isso: o invasor perde o acesso agora, não daqui a 14 dias.
+
+O mecanismo é um contador `token_versao` no usuário, levado no token como claim
+`ver` e comparado por igualdade. A primeira implementação comparava o `iat` do
+JWT com `senha_alterada_em` — ambos com resolução de um segundo, então trocar a
+senha no mesmo segundo do login deixava o token anterior válido. Um contador não
+tem resolução a perder. Quem pegou isso foi a suíte de testes.
 
 ### CSRF
 

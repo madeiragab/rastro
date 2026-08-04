@@ -203,7 +203,14 @@ The MVP is demo-ready when:
 5. ✅ Forcing silence raises a signal-loss alert in under 2 min
 6. ✅ No false alerts during 10 min of normal grazing
 7. ✅ Access requires login, and gateways require their own key
-8. ⬜ **Verified in a real run** — pending: see [status](../README.md#quick-start)
+8. ✅ **Verified in a real run**
 
-Items 1 through 7 are implemented and verified by static analysis. Item 8 is
-what is missing: the application has not yet been run end to end.
+All verified with the system running, on 2026-08-04. The out-of-area alert fired
+about 25 s after pressing the button in the UI, with the distance computed by
+PostGIS. The 124-test suite covers items 3 to 7, including the cases that must
+**not** fire (item 6).
+
+That first run surfaced five defects static analysis had missed — one of them
+invalidating roughly a third of all generated gateway keys. The note stays here
+as a reminder: code that compiles, type-checks and reads well is still not code
+that runs.

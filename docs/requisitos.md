@@ -203,7 +203,14 @@ O MVP está pronto para demonstração quando:
 5. ✅ Forçar silêncio gera alerta de perda de sinal em menos de 2 min
 6. ✅ Nenhum alerta falso durante 10 min de pastejo normal
 7. ✅ O acesso exige login, e o gateway exige chave própria
-8. ⬜ **Verificado em execução real** — pendente: ver [estado atual](../README.pt-BR.md#status)
+8. ✅ **Verificado em execução real**
 
-Os itens 1 a 7 estão implementados e verificados por análise estática. O item 8
-é o que falta: a aplicação ainda não foi executada de ponta a ponta.
+Todos verificados com o sistema rodando, em 04/08/2026. O alerta de área
+disparou em ~25 s a partir do botão da interface, com a distância calculada pelo
+PostGIS. A suíte de 124 testes cobre os itens 3 a 7, incluindo os casos que
+**não** podem disparar (item 6).
+
+A primeira execução encontrou cinco defeitos que a análise estática não pegava —
+entre eles um que invalidava cerca de um terço das chaves de gateway geradas.
+Registro fica aqui como lembrete: código que compila, tem tipo e passa em
+revisão ainda não é código que roda.

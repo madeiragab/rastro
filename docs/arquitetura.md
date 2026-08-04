@@ -134,6 +134,7 @@ erDiagram
         string senha_hash "Argon2id"
         string papel
         timestamp senha_alterada_em
+        int token_versao "invalida access tokens antigos"
     }
     SESSAO_REFRESH {
         int id PK

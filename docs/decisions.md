@@ -203,3 +203,26 @@ badly reconnecting WebSocket is worse than polling.
 
 **Consequence:** constant traffic and up to 3 s of latency. Replace it when the
 client count justifies it, not before.
+
+---
+
+## ADR-013 — A version counter to invalidate tokens, not a timestamp
+
+**Situation:** changing the password must reject every access token already
+issued.
+
+**First attempt:** compare the JWT's `iat` against the user's
+`senha_alterada_em`. A token issued before the change is rejected.
+
+**Why it was wrong:** both values have **one-second** resolution. Changing the
+password in the same second the token was issued left the previous token valid —
+which is precisely the situation of someone who has just realised they were
+breached and is racing to change their password. The window is small, and it
+sits at the worst possible moment.
+
+**Decision:** a `token_versao` counter on the user, carried in the token as a
+`ver` claim and compared for equality. Changing the password increments it.
+
+**Consequence:** no resolution, no clock, no window. It costs one `integer`
+column and one comparison. The test suite found this on the first real run — not
+code review, which read the `<` and considered it correct.
