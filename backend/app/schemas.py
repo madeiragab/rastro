@@ -189,6 +189,24 @@ class TrocarSenhaIn(BaseModel):
     senha_nova: str = Field(repr=False)
 
 
+# -------------------------------------------------------------------- push
+class ChavePublicaOut(BaseModel):
+    chave: str
+
+
+class InscricaoPushIn(BaseModel):
+    endpoint: str = Field(min_length=10, max_length=2000)
+    chave_p256dh: str = Field(min_length=10, max_length=255)
+    chave_auth: str = Field(min_length=6, max_length=255)
+
+
+class InscricaoPushOut(BaseModel):
+    id: int
+    endpoint: str
+    criada_em: dt.datetime
+    ultimo_envio: dt.datetime | None
+
+
 class EsqueciSenhaIn(BaseModel):
     email: EmailStr
 

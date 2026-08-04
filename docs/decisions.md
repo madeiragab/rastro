@@ -226,3 +226,66 @@ sits at the worst possible moment.
 **Consequence:** no resolution, no clock, no window. It costs one `integer`
 column and one comparison. The test suite found this on the first real run — not
 code review, which read the `<` and considered it correct.
+
+---
+
+## ADR-014 — Push dispatched by a background loop, not on the request path
+
+**Situation:** when an alert opens, subscribed devices must receive a push.
+
+**Decision:** a separate loop scans for alerts with a null `notificado_em` and
+sends. Telemetry does not wait for push.
+
+**Reason:** push goes out over HTTP to the browser vendor's service — a third
+party, outside our control, that may be slow or down. Doing that inside
+`POST /api/telemetria` would mean a gateway waiting on Google to have a position
+acknowledged. A LoRa link with a short transmit window does not have that time.
+
+**Why the mark lives on the alert rather than in an in-memory queue:** restarts.
+An in-memory queue loses whatever was pending; a database column survives, and
+the same column prevents re-sending.
+
+**A detail that only shows up at runtime:** an alert with no subscriptions at all
+is also marked as notified. Without that, alerts would pile up and the first
+person to enable notifications would receive the entire backlog at once.
+
+**Consequence:** up to one cycle (5 s) of latency between an alert opening and
+the push going out. Irrelevant for an alert whose field threshold is measured in
+hours.
+
+---
+
+## ADR-015 — VAPID keys in the database, not in an environment variable
+
+**Situation:** Web Push requires a stable key pair per installation.
+
+**Decision:** generate on first need and store in the database.
+
+**Rejected alternative:** an environment variable. It is the natural home for a
+secret, but it has a specific problem here: if the variable is unset, the
+application must choose between refusing to boot and generating a fresh key on
+every restart. The second option invalidates every existing subscription — and
+**devices are never told**. They simply stop receiving alerts.
+
+**Consequence:** in an alerting system, silent failure is the worst failure
+class. A key in the database survives restarts without requiring configuration,
+at the cost of a one-row table.
+
+---
+
+## ADR-016 — TLS as an optional profile, not the default
+
+**Situation:** Service Workers and push only work in a secure context. But
+`http://localhost` **is** a secure context by specification.
+
+**Decision:** keep HTTP as the default and offer TLS through a compose profile
+(`--profile tls`), with Caddy and a local-authority certificate.
+
+**Reason:** turning TLS on by default would show a certificate warning to
+everyone who just wants to run the project on `localhost` — where push already
+works without it. TLS solves one specific case: opening the app on a phone over
+the LAN, where `http://192.168.x.x` is not a secure context.
+
+**Consequence:** two documented paths instead of one. In exchange, someone who
+just wants to see the project running does not trip over a browser security
+warning on the very first screen.

@@ -190,10 +190,11 @@ Lista honesta. Cada item é uma decisão consciente de MVP, não um esquecimento
 
 | Lacuna | Risco | O que fazer antes de produção |
 |---|---|---|
-| **Sem HTTPS no compose** | Tudo em texto claro na rede | Terminar TLS num proxy reverso (Caddy, nginx) |
+| **HTTPS opcional** | O perfil `tls` existe e usa certificado de autoridade local; por padrão o compose serve HTTP | Domínio real com Let's Encrypt e `COOKIE_SECURE=true` |
 | **Sem segundo fator** | Senha vazada = acesso total | TOTP ao menos para o papel `dono` |
-| **Sem recuperação de senha** | Esqueceu, perdeu a conta | Fluxo por e-mail com token de uso único |
-| **Sem rate limit geral** | Só o login é limitado; o resto da API não | Limite por IP na borda |
+| **Sem SMTP** | A recuperação de senha funciona, mas o link vai para o log da API em vez do e-mail | Plugar provedor em `services/notificacao.py` |
+| **Sem rate limit geral** | Só login e recuperação de senha são limitados; o resto da API não | Limite por IP na borda |
+| **Push sem confirmação de entrega** | O serviço do fabricante aceita e pode não entregar; o sistema não sabe | Reconciliação, ou canal secundário para alerta crítico |
 | **Lista de senhas fraca** | ~30 itens, ilustrativa | Top 100k do HIBP, ou API de senhas vazadas com k-anonimato |
 | **Auditoria sem retenção definida** | Cresce sem limite; sem política de exportação | Definir retenção e destino externo |
 | **Segredo em variável de ambiente** | Visível em `docker inspect` e no histórico do shell | Gerenciador de segredos (Vault, SSM, Secret Manager) |

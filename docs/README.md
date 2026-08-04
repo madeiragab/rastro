@@ -7,7 +7,7 @@
 | [Requirements](requirements.md) | Problem, personas, functional and non-functional requirements, permission matrix, business rules, glossary, acceptance criteria |
 | [Architecture](architecture.md) | Context and container diagrams, ER model, telemetry and auth sequence diagrams, alert state machine, layering, known limits |
 | [Security](security.md) | Threat model, STRIDE, every implemented control with its rationale, and an honest list of what is **not** protected |
-| [Decision log](decisions.md) | 13 ADRs: what was decided, what was rejected, and why |
+| [Decision log](decisions.md) | 16 ADRs: what was decided, what was rejected, and why |
 
 Start from the [root README](../README.md) for setup and demo instructions.
 

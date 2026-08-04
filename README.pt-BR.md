@@ -110,6 +110,8 @@ que **não** está coberto.
 | Cabeçalhos | CSP fechada, `nosniff`, `DENY` de frame, `no-referrer`, COOP/CORP, `no-store`, HSTS sob HTTPS |
 | Configuração | A aplicação **se recusa a subir** em produção com segredo fraco, cookie inseguro, CORS `http://` não-local ou simulador ligado |
 | Autorização | Declarada no roteador, então rota nova nasce protegida; três papéis verificados no servidor |
+| Equipe | Senha inicial sorteada pelo servidor e exibida uma vez; rebaixar ou desativar invalida o token na hora; ninguém altera a própria conta |
+| Recuperação de senha | Token opaco de uso único, 30 min, 3 pedidos por hora; redefinir revoga sessões e demais links pendentes |
 
 ---
 
@@ -206,6 +208,11 @@ endpoints públicos.
 | `POST` | `/api/auth/logout` | cookie | Revoga a família da sessão |
 | `GET` | `/api/auth/eu` | usuário | Usuário atual |
 | `POST` | `/api/auth/senha` | usuário | Troca a senha (encerra todas as sessões) |
+| `POST` | `/api/auth/esqueci` | — | Pede link de redefinição (responde igual exista ou não a conta) |
+| `POST` | `/api/auth/redefinir` | token | Consome o link e grava a senha nova |
+| `GET` `POST` `PATCH` | `/api/usuarios` | dono | Gerencia a equipe e os papéis |
+| `GET` | `/api/push/chave-publica` | usuário | Chave VAPID para o navegador assinar |
+| `POST` `DELETE` | `/api/push/inscricoes` | usuário | Registra ou cancela o aparelho |
 | `GET` | `/api/fazenda` | usuário | Fazenda atual |
 | `GET` | `/api/resumo` | usuário | Contadores do painel |
 | `GET` | `/api/animais` | usuário | Animais com última posição e status |
@@ -242,22 +249,53 @@ bovinos a partir de 2033.
 
 ---
 
+## Notificação push
+
+O alerta chega ao celular **com o app fechado** — é a promessa central do
+produto. Ative em **Conta → Notificações**.
+
+Web Push com VAPID. O par de chaves é gerado na primeira necessidade e guardado
+no banco, não em variável de ambiente: trocar a chave invalidaria todas as
+inscrições, e os aparelhos só perceberiam deixando de receber aviso — falha
+silenciosa, que é o pior tipo num sistema de alerta.
+
+O envio roda num laço de fundo, não no caminho da requisição de telemetria: push
+sai por HTTP para o serviço do fabricante do navegador, e o gateway não pode
+esperar isso para confirmar uma posição. A marca `notificado_em` fica no próprio
+alerta, então reiniciar no meio não perde nem duplica aviso.
+
+**Restrição do navegador:** Service Worker só registra em contexto seguro —
+HTTPS **ou** `localhost`. No celular, pela rede local, `http://192.168.x.x` não
+serve. Daí o perfil de TLS abaixo.
+
+## HTTPS local
+
+```bash
+TLS_HOST=192.168.0.12 docker compose --profile tls up
+```
+
+Sobe um Caddy em `https://localhost` (e no IP informado) com certificado emitido
+por uma autoridade local. O navegador avisa até que essa autoridade seja
+confiada no aparelho. Não sobe por padrão, e não redireciona HTTP — o acesso por
+`localhost` continua funcionando como antes.
+
+Em produção, troque por um domínio real: o Caddy resolve o Let's Encrypt
+sozinho. Ligue `COOKIE_SECURE=true` junto.
+
 ## Pendências antes de produção
 
-- **TLS.** O compose serve HTTP puro. Terminar TLS num proxy reverso e ligar
-  `COOKIE_SECURE=true`.
 - **Segundo fator.** Não implementado. TOTP ao menos para o papel `dono`.
-- **Recuperação de senha.** Não implementada — esqueceu, perdeu a conta.
-- **Migrações.** O schema é criado por `create_all`, então **qualquer mudança de
-  modelo exige `docker compose down -v`** — senão a API sobe e toda consulta bate
-  numa coluna que não existe. Já aconteceu uma vez. Trocar por Alembic antes do
-  primeiro piloto com dado real.
-- **Notificação push.** Hoje o alerta só aparece dentro do painel. O push para o
-  celular é a promessa central do produto e é o principal motivo do app React
-  Native estar no roadmap.
+- **SMTP.** A recuperação de senha funciona, mas o link é escrito no log da API
+  em vez de enviado por e-mail. Falta plugar um provedor em
+  `services/notificacao.py` — a abstração já está isolada ali.
 - **Multi-fazenda.** O MVP assume uma fazenda só.
 - **Gestão de segredos.** Os segredos vêm de variável de ambiente, visível em
   `docker inspect`. Migrar para um cofre.
+- **Limite de taxa geral.** Só login e recuperação de senha são limitados; o
+  resto da API não.
+- **Push no iOS.** Funciona pleno no Android/Chrome. No Safari exige o app
+  adicionado à tela inicial — é o principal argumento a favor do React Native
+  no roadmap.
 
 A lista completa, com risco e remédio de cada item, está em
 [docs/seguranca.md](docs/seguranca.md#o-que-não-está-protegido).

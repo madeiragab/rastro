@@ -178,6 +178,15 @@ export const api = {
       body: JSON.stringify({ token, senha_nova }),
     }),
 
+  // --------------------------------------------------------------- push
+  chavePublicaPush: () => pedir<{ chave: string }>("/push/chave-publica"),
+
+  inscreverPush: (dados: { endpoint: string; chave_p256dh: string; chave_auth: string }) =>
+    pedir<unknown>("/push/inscricoes", { method: "POST", body: JSON.stringify(dados) }),
+
+  cancelarPush: (dados: { endpoint: string; chave_p256dh: string; chave_auth: string }) =>
+    pedir<void>("/push/inscricoes", { method: "DELETE", body: JSON.stringify(dados) }),
+
   // ------------------------------------------------------------- equipe
   usuarios: () => pedir<Usuario[]>("/usuarios"),
 
