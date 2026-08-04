@@ -248,6 +248,31 @@ class ChaveGateway(Base):
     fazenda: Mapped[Fazenda] = relationship()
 
 
+class TokenResetSenha(Base):
+    """Token de uso unico para redefinir senha esquecida.
+
+    Guardado como SHA-256, pelo mesmo motivo do refresh: 256 bits aleatorios
+    nao tem dicionario a percorrer, entao hash rapido ja impede que um dump do
+    banco vire redefinicao de senha alheia.
+
+    Vida curta de proposito. Um link de redefinicao e uma credencial completa
+    circulando por e-mail, que e um canal que ninguem controla.
+    """
+
+    __tablename__ = "tokens_reset_senha"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    usuario_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id", ondelete="CASCADE"), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True)
+
+    criado_em: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=agora, index=True)
+    expira_em: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True))
+    usado_em: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    ip: Mapped[str] = mapped_column(String(45), default="")
+
+    usuario: Mapped[Usuario] = relationship()
+
+
 class TentativaLogin(Base):
     """Registro de tentativas, para bloqueio progressivo por e-mail e por IP."""
 

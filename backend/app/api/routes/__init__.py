@@ -17,6 +17,7 @@ from app.api.routes import (
     resumo,
     simulacao,
     telemetria,
+    usuarios,
 )
 from app.models import PAPEL_OPERADOR
 
@@ -34,9 +35,10 @@ api_router.include_router(alertas.router, dependencies=protegido)
 # Criar e apagar pasto muda a geocerca de todo o rebanho -- exige operador.
 api_router.include_router(pastos.router, dependencies=[Depends(exige_papel(PAPEL_OPERADOR))])
 
-# Chaves de gateway: a checagem de papel `dono` esta em cada rota, porque elas
-# precisam do objeto do usuario para filtrar pela fazenda.
+# Chaves de gateway e equipe: a checagem de papel `dono` esta em cada rota,
+# porque elas precisam do objeto do usuario para filtrar pela fazenda.
 api_router.include_router(gateways.router, dependencies=protegido)
+api_router.include_router(usuarios.router, dependencies=protegido)
 
 # --- identidade de dispositivo ------------------------------------------
 api_router.include_router(telemetria.router, dependencies=[Depends(gateway_atual)])

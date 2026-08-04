@@ -8,6 +8,7 @@ import { MapaView } from "./components/MapaView";
 import { PainelConta } from "./components/PainelConta";
 import { PainelSimulacao } from "./components/PainelSimulacao";
 import { TelaLogin } from "./components/TelaLogin";
+import { TelaRedefinir } from "./components/TelaRedefinir";
 import { TirasResumo } from "./components/TirasResumo";
 import type { Alerta, Animal, Comportamento, Fazenda, Pasto, Posicao, Resumo, Usuario } from "./types";
 import { podeEditar } from "./types";
@@ -19,6 +20,13 @@ type Aba = "rebanho" | "alertas" | "simular" | "conta";
 export default function App() {
   const [usuario, setUsuario] = useState<Usuario | null>(null);
   const [verificandoSessao, setVerificandoSessao] = useState(true);
+
+  // Lido uma vez, na carga: o token do link de redefinição não deve ficar na
+  // barra de endereço mais do que o necessário.
+  const [tokenDeReset, setTokenDeReset] = useState<string | null>(() => {
+    if (window.location.pathname !== "/redefinir") return null;
+    return new URLSearchParams(window.location.search).get("token");
+  });
 
   const [fazenda, setFazenda] = useState<Fazenda | null>(null);
   const [resumo, setResumo] = useState<Resumo | null>(null);
@@ -188,6 +196,21 @@ export default function App() {
   }
 
   // --------------------------------------------------------------- portões
+  // Rota única fora do app: o link de redefinição chega por e-mail e precisa
+  // funcionar sem sessão. Uma verificação de caminho resolve — trazer um
+  // roteador inteiro para uma tela seria peso sem uso.
+  if (tokenDeReset) {
+    return (
+      <TelaRedefinir
+        token={tokenDeReset}
+        onConcluido={() => {
+          window.history.replaceState({}, "", "/");
+          setTokenDeReset(null);
+        }}
+      />
+    );
+  }
+
   if (verificandoSessao) {
     return (
       <div className="tela-login">

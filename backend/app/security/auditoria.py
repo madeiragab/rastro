@@ -26,6 +26,10 @@ SENHA_ALTERADA = "senha.alterada"
 CHAVE_CRIADA = "gateway.chave_criada"
 CHAVE_REVOGADA = "gateway.chave_revogada"
 TELEMETRIA_NEGADA = "telemetria.negada"
+USUARIO_CRIADO = "usuario.criado"
+USUARIO_ALTERADO = "usuario.alterado"
+SENHA_RESET_SOLICITADO = "senha.reset_solicitado"
+SENHA_RESET_USADO = "senha.reset_usado"
 
 
 def registrar(

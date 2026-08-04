@@ -680,6 +680,21 @@ button {
   margin-top: 8px;
 }
 
+.link-discreto {
+  background: none;
+  border: none;
+  color: var(--texto-fraco);
+  font-size: 13px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  padding: 10px;
+  min-height: var(--toque);
+}
+
+.link-discreto:active {
+  color: var(--verde);
+}
+
 /* ================================================================== conta */
 .linha-dado {
   display: flex;
@@ -701,6 +716,32 @@ button {
   border-radius: 999px;
   padding: 3px 9px;
   white-space: nowrap;
+}
+
+.linha-equipe {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--borda);
+}
+
+.linha-equipe-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.campo-select {
+  width: auto;
+  min-width: 104px;
+  flex-shrink: 0;
+  font-size: 13px;
+  padding: 0 8px;
+}
+
+.campo:disabled,
+.botao-mini:disabled {
+  opacity: 0.45;
 }
 
 .chave-nova {

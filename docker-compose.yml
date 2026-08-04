@@ -37,6 +37,8 @@ services:
       - "127.0.0.1:${API_PORT:-8000}:8000"
     volumes:
       - ./backend/app:/code/app
+      - ./backend/alembic:/code/alembic
+      - ./backend/alembic.ini:/code/alembic.ini
     # --no-server-header: o uvicorn injeta `Server: uvicorn` na camada de
     # protocolo, depois do ASGI, então middleware não alcança. Só aqui.
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --no-server-header

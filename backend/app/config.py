@@ -59,6 +59,13 @@ class Settings(BaseSettings):
 
     senha_tamanho_minimo: int = 12
 
+    # Redefinicao de senha. Vida curta: o link e uma credencial completa
+    # circulando por e-mail, canal que ninguem controla.
+    reset_token_ttl_min: int = 30
+    reset_max_por_hora: int = 3
+    # Base para montar o link. Em producao, o dominio publico do app.
+    app_url: str = "http://localhost:5173"
+
     # ---------------------------------------------- protecao contra forca bruta
     login_max_tentativas: int = 5
     login_janela_min: int = 15

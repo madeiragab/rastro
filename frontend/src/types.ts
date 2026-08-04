@@ -77,8 +77,14 @@ export interface Usuario {
   email: string;
   nome: string;
   papel: Papel;
+  ativo: boolean;
   fazenda_id: number | null;
   ultimo_login_em: string | null;
+}
+
+/** Só a criação devolve a senha inicial — e uma única vez. */
+export interface UsuarioCriado extends Usuario {
+  senha_inicial: string;
 }
 
 export interface RespostaLogin {

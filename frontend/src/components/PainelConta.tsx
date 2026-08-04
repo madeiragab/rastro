@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, ErroApi } from "../api";
 import type { ChaveGateway, Usuario } from "../types";
+import { PainelEquipe } from "./PainelEquipe";
 
 interface Props {
   usuario: Usuario;
@@ -105,6 +106,8 @@ export function PainelConta({ usuario, onSair }: Props) {
           Trocar a senha encerra todas as sessões abertas, em todos os aparelhos.
         </div>
       </div>
+
+      {ehDono && <PainelEquipe eu={usuario} />}
 
       {ehDono && (
         <div className="bloco">

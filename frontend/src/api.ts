@@ -5,11 +5,13 @@ import type {
   ChaveGatewayCriada,
   Comportamento,
   Fazenda,
+  Papel,
   Pasto,
   Posicao,
   Resumo,
   RespostaLogin,
   Usuario,
+  UsuarioCriado,
 } from "./types";
 
 const BASE = "/api";
@@ -161,6 +163,34 @@ export const api = {
     pedir<void>("/auth/senha", {
       method: "POST",
       body: JSON.stringify({ senha_atual, senha_nova }),
+    }),
+
+  /** Responde 202 exista ou não a conta — a resposta não confirma cadastro. */
+  esqueciSenha: (email: string) =>
+    pedir<{ detail: string }>("/auth/esqueci", {
+      method: "POST",
+      body: JSON.stringify({ email }),
+    }),
+
+  redefinirSenha: (token: string, senha_nova: string) =>
+    pedir<void>("/auth/redefinir", {
+      method: "POST",
+      body: JSON.stringify({ token, senha_nova }),
+    }),
+
+  // ------------------------------------------------------------- equipe
+  usuarios: () => pedir<Usuario[]>("/usuarios"),
+
+  criarUsuario: (email: string, nome: string, papel: Papel) =>
+    pedir<UsuarioCriado>("/usuarios", {
+      method: "POST",
+      body: JSON.stringify({ email, nome, papel }),
+    }),
+
+  alterarUsuario: (id: number, mudanca: { papel?: Papel; ativo?: boolean }) =>
+    pedir<Usuario>(`/usuarios/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(mudanca),
     }),
 
   // ------------------------------------------------------------- dados

@@ -16,11 +16,17 @@ from tests.conftest import auth, criar_usuario, entrar
 EMAIL_LEITOR = "leitor@teste.com.br"
 EMAIL_OPERADOR = "operador@teste.com.br"
 
-# Únicas rotas que podem responder sem credencial.
+# Únicas rotas que podem responder sem credencial. Cada entrada aqui é uma
+# decisão que precisa ser defendida na revisão — é de propósito que a lista
+# fique num único lugar visível.
 PUBLICAS = {
     ("POST", "/api/auth/login"),
     ("POST", "/api/auth/refresh"),
     ("POST", "/api/auth/logout"),
+    # Recuperação de senha: quem esqueceu a senha, por definição, não consegue
+    # se autenticar para pedir a redefinição.
+    ("POST", "/api/auth/esqueci"),
+    ("POST", "/api/auth/redefinir"),
     ("GET", "/health"),
 }
 
