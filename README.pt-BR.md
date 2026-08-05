@@ -2,6 +2,8 @@
 
 [🇬🇧 English](README.md) · **🇧🇷 Português**
 
+[![ci](https://github.com/madeiragab/rastro/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/madeiragab/rastro/actions/workflows/ci.yml)
+
 Rastreamento em tempo real e geocerca para rebanho bovino.
 
 O produtor desenha o pasto no mapa e recebe alerta quando o animal **sai da área**,
@@ -10,8 +12,10 @@ O produtor desenha o pasto no mapa e recebe alerta quando o animal **sai da áre
 App web mobile-first com simulador de rebanho embutido — roda sem hardware nenhum.
 
 > **Status: MVP / demonstração.** Roda de ponta a ponta e está verificado: 124
-> testes contra PostGIS real, mais uma passagem manual por login, rotação de
-> sessão, telemetria autenticada e o ciclo completo de alerta de geocerca. **Não**
+> testes contra PostGIS real — [rodados pelo CI a cada push](https://github.com/madeiragab/rastro/actions/workflows/ci.yml),
+> contra um serviço `postgis/postgis:16-3.4` de verdade, não contra dublê — mais
+> uma passagem manual por login, rotação de sessão, telemetria autenticada e o
+> ciclo completo de alerta de geocerca. **Não**
 > passou por auditoria externa nem por teste de intrusão, e vários requisitos de
 > produção continuam faltando — ver
 > [Pendências antes de produção](#pendências-antes-de-produção).

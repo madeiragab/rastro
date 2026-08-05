@@ -2,6 +2,8 @@
 
 **🇬🇧 English** · [🇧🇷 Português](README.pt-BR.md)
 
+[![ci](https://github.com/madeiragab/rastro/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/madeiragab/rastro/actions/workflows/ci.yml)
+
 Real-time tracking and geofencing for cattle herds.
 
 The rancher draws the pasture boundary on a map and gets alerted when an animal
@@ -10,8 +12,10 @@ The rancher draws the pasture boundary on a map and gets alerted when an animal
 Mobile-first web app with a built-in herd simulator — runs with no hardware at all.
 
 > **Status: MVP / demo.** Runs end to end and is verified: 124 tests against real
-> PostGIS, plus a manual pass over login, session rotation, authenticated
-> telemetry and the full geofence alert cycle. It has **not** been externally
+> PostGIS — [run by CI on every push](https://github.com/madeiragab/rastro/actions/workflows/ci.yml),
+> against a live `postgis/postgis:16-3.4` service, not a stub — plus a manual pass
+> over login, session rotation, authenticated telemetry and the full geofence
+> alert cycle. It has **not** been externally
 > audited or penetration tested, and several production requirements are still
 > missing — see [Before production](#before-production).
 
