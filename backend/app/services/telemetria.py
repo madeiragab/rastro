@@ -23,6 +23,7 @@ def registrar(
     atividade: float = 0.5,
     bateria_pct: int | None = None,
     registrada_em: dt.datetime | None = None,
+    evento: str | None = None,
 ) -> Posicao:
     momento = registrada_em or agora()
 
@@ -40,5 +41,5 @@ def registrar(
     if bateria_pct is not None:
         animal.bateria_pct = bateria_pct
 
-    alertas.avaliar_posicao(db, animal, lat, lon, atividade)
+    alertas.avaliar_posicao(db, animal, lat, lon, atividade, evento)
     return posicao

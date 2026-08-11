@@ -40,6 +40,10 @@ STATUS_OFFLINE = "sem_sinal"
 ALERTA_FORA = "fora_da_area"
 ALERTA_IMOVEL = "imovel"
 ALERTA_SEM_SINAL = "sem_sinal"
+# Um lote inteiro calou de uma vez. Quase sempre significa mestre caido, nao
+# rebanho roubado -- e por isso e um alerta proprio, e nao 20 de perda de sinal.
+ALERTA_LOTE_MUDO = "lote_sem_comunicacao"
+ALERTA_MESTRE_TROCADO = "mestre_trocado"
 
 COMPORTAMENTOS = ("normal", "fugindo", "imovel", "offline")
 
@@ -127,7 +131,14 @@ class Alerta(Base):
     __tablename__ = "alertas"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-    animal_id: Mapped[int] = mapped_column(ForeignKey("animais.id", ondelete="CASCADE"), index=True)
+    # Nulo quando o alerta e sobre o lote, e nao sobre um animal -- "lote sem
+    # comunicacao" e "mestre trocado" nao pertencem a nenhum bicho especifico.
+    animal_id: Mapped[int | None] = mapped_column(
+        ForeignKey("animais.id", ondelete="CASCADE"), index=True, nullable=True
+    )
+    pasto_id: Mapped[int | None] = mapped_column(
+        ForeignKey("pastos.id", ondelete="CASCADE"), index=True, nullable=True
+    )
     tipo: Mapped[str] = mapped_column(String(30), index=True)
     severidade: Mapped[str] = mapped_column(String(10), default="alta")
     mensagem: Mapped[str] = mapped_column(Text)
@@ -141,7 +152,8 @@ class Alerta(Base):
         DateTime(timezone=True), nullable=True, index=True
     )
 
-    animal: Mapped[Animal] = relationship()
+    animal: Mapped[Animal | None] = relationship()
+    pasto: Mapped[Pasto | None] = relationship()
 
 
 # ==========================================================================
@@ -252,6 +264,58 @@ class ChaveGateway(Base):
     revogada_em: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
     fazenda: Mapped[Fazenda] = relationship()
+
+
+class Mestre(Base):
+    """Brinco com modem celular, que repassa o lote inteiro.
+
+    Cada lote tem varios mestres cadastrados e **um** em servico. Os outros
+    escutam calados, prontos para assumir.
+
+    Quem decide qual esta ativo e o servidor, nunca os proprios brincos: o caso
+    comum de campo e o mestre estar vivo e um reserva simplesmente nao ouvi-lo
+    -- grota, mata, chuva. Se o reserva decidisse sozinho, passariam a existir
+    dois mestres gastando celular, ambos convictos, e como nao se ouvem isso
+    nunca se resolveria.
+
+    A garantia de um so ativo por lote nao fica so no codigo: ha indice unico
+    parcial no banco (ver migracao 0004).
+    """
+
+    __tablename__ = "mestres"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    fazenda_id: Mapped[int] = mapped_column(ForeignKey("fazendas.id", ondelete="CASCADE"), index=True)
+    # O lote que ele atende. Lotes que nao se ouvem por radio precisam cada um
+    # dos seus mestres.
+    pasto_id: Mapped[int | None] = mapped_column(
+        ForeignKey("pastos.id", ondelete="SET NULL"), index=True, nullable=True
+    )
+    # A credencial que ele usa para falar com a API.
+    chave_gateway_id: Mapped[int] = mapped_column(
+        ForeignKey("chaves_gateway.id", ondelete="CASCADE"), unique=True
+    )
+    # O animal que carrega este brinco.
+    animal_id: Mapped[int | None] = mapped_column(
+        ForeignKey("animais.id", ondelete="SET NULL"), unique=True, nullable=True
+    )
+
+    ativo: Mapped[bool] = mapped_column(Boolean, default=False, index=True)
+    bateria_pct: Mapped[int] = mapped_column(Integer, default=100)
+    ultimo_heartbeat: Mapped[dt.datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, index=True
+    )
+    assumiu_em: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # Quantas vezes assumiu. Numero subindo depressa e sinal de rede instavel,
+    # nao de mestre ruim.
+    trocas: Mapped[int] = mapped_column(Integer, default=0)
+
+    criado_em: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=agora)
+
+    fazenda: Mapped[Fazenda] = relationship()
+    pasto: Mapped[Pasto | None] = relationship()
+    animal: Mapped[Animal | None] = relationship()
+    chave: Mapped[ChaveGateway] = relationship()
 
 
 class InscricaoPush(Base):

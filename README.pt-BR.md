@@ -23,7 +23,8 @@ App web mobile-first com simulador de rebanho embutido — roda sem hardware nen
 📚 **[Documentação completa](docs/README.pt-BR.md)** — [requisitos](docs/requisitos.md) ·
 [arquitetura](docs/arquitetura.md) · [segurança](docs/seguranca.md) ·
 [decisões](docs/decisoes.md) · [implantação](docs/implantacao.md) ·
-[hardware](docs/arquitetura-hardware.md)
+[hardware](docs/arquitetura-hardware.md) ·
+[protocolo](docs/protocolo-dispositivos.md)
 
 ---
 

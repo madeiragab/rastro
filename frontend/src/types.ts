@@ -46,10 +46,18 @@ export interface Posicao {
 
 export interface Alerta {
   id: number;
-  animal_id: number;
-  animal_nome: string;
-  brinco: string;
-  tipo: "fora_da_area" | "imovel" | "sem_sinal";
+  /** Nulos quando o alerta é sobre o lote, não sobre um animal. */
+  animal_id: number | null;
+  animal_nome: string | null;
+  brinco: string | null;
+  pasto_id: number | null;
+  pasto_nome: string | null;
+  tipo:
+    | "fora_da_area"
+    | "imovel"
+    | "sem_sinal"
+    | "lote_sem_comunicacao"
+    | "mestre_trocado";
   severidade: string;
   mensagem: string;
   lat: number | null;

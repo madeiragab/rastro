@@ -12,7 +12,9 @@ from app.api.routes import (
     alertas,
     animais,
     auth,
+    dispositivos,
     gateways,
+    mestres,
     pastos,
     push,
     resumo,
@@ -41,9 +43,12 @@ api_router.include_router(pastos.router, dependencies=[Depends(exige_papel(PAPEL
 # porque elas precisam do objeto do usuario para filtrar pela fazenda.
 api_router.include_router(gateways.router, dependencies=protegido)
 api_router.include_router(usuarios.router, dependencies=protegido)
+api_router.include_router(mestres.router, dependencies=protegido)
 
 # --- identidade de dispositivo ------------------------------------------
+# Quem fala aqui e equipamento em campo, autenticado por chave de gateway.
 api_router.include_router(telemetria.router, dependencies=[Depends(gateway_atual)])
+api_router.include_router(dispositivos.router, dependencies=[Depends(gateway_atual)])
 
 # --- demonstracao --------------------------------------------------------
 # Desligado em producao pela validacao de configuracao (simulator_enabled).

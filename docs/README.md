@@ -10,6 +10,7 @@
 | [Decision log](decisions.md) | 16 ADRs: what was decided, what was rejected, and why |
 | [Deployment](deploy.md) | Going live on a Linux server: domain, TLS, SMTP, backups, updates — and what is still missing to call it mature infrastructure |
 | [Hardware architecture](hardware-architecture.md) | The field side, which does not exist yet: radio mesh across the herd, geofence running on the tag, three rotating masters, battery life, unit cost and pricing |
+| [Device protocol](device-protocol.md) | What the boards say to the server: tag and master cycles, endpoints, election state machine — the firmware will be written against this |
 
 Start from the [root README](../README.md) for setup and demo instructions.
 
