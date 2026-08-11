@@ -69,8 +69,10 @@ def alerta_out(db: Session, alerta: Alerta) -> AlertaOut:
     return AlertaOut(
         id=alerta.id,
         animal_id=alerta.animal_id,
-        animal_nome=alerta.animal.nome,
-        brinco=alerta.animal.brinco,
+        animal_nome=alerta.animal.nome if alerta.animal else None,
+        brinco=alerta.animal.brinco if alerta.animal else None,
+        pasto_id=alerta.pasto_id,
+        pasto_nome=alerta.pasto.nome if alerta.pasto else None,
         tipo=alerta.tipo,
         severidade=alerta.severidade,
         mensagem=alerta.mensagem,

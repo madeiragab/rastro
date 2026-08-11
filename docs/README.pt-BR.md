@@ -10,6 +10,7 @@
 | [Registro de decisões](decisoes.md) | 16 ADRs: o que foi decidido, o que foi descartado, e por quê |
 | [Implantação](implantacao.md) | Colocar no ar num servidor Linux: domínio, TLS, SMTP, backup, atualização — e o que ainda falta para ser infraestrutura madura |
 | [Arquitetura de hardware](arquitetura-hardware.md) | O lado do campo, que ainda não existe: malha de rádio no rebanho, geocerca rodando no brinco, três mestres em rodízio, autonomia de bateria, custo unitário e preço |
+| [Protocolo dos dispositivos](protocolo-dispositivos.md) | O que as placas falam com o servidor: ciclo do brinco e do mestre, endpoints, máquina de estados da eleição — é contra este documento que o firmware será escrito |
 
 Comece pelo [README da raiz](../README.pt-BR.md) para instruções de execução e
 demonstração.

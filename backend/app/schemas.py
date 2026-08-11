@@ -62,6 +62,34 @@ class AnimalOut(BaseModel):
 
 
 # ------------------------------------------------------------------ posicao
+def validar_horario_plausivel(v: dt.datetime | None) -> dt.datetime | None:
+    """Recusa carimbo de tempo absurdo.
+
+    Sem isso, um dispositivo comprometido poderia inserir posicao no futuro e
+    silenciar o alerta de perda de sinal para sempre, ou reescrever a trilha do
+    passado.
+
+    Funcao solta, e nao metodo, porque vale para leitura avulsa e para leitura
+    dentro de lote -- e duplicar regra de validacao e como as duas param de
+    concordar.
+    """
+    if v is None:
+        return None
+
+    momento = v if v.tzinfo else v.replace(tzinfo=dt.timezone.utc)
+    agora = dt.datetime.now(dt.timezone.utc)
+
+    # Alguma folga no futuro absorve relogio dessincronizado do dispositivo.
+    if momento > agora + dt.timedelta(minutes=5):
+        raise ValueError("registrada_em no futuro")
+    # Aceita ate 7 dias de atraso: o mestre pode ter ficado sem cobertura e
+    # estar descarregando o que acumulou.
+    if momento < agora - dt.timedelta(days=7):
+        raise ValueError("registrada_em antiga demais")
+
+    return momento
+
+
 class PosicaoIn(BaseModel):
     """Payload que o brinco enviaria, repassado pelo gateway.
 
@@ -79,28 +107,62 @@ class PosicaoIn(BaseModel):
 
     @field_validator("registrada_em")
     @classmethod
-    def _horario_plausivel(cls, v: dt.datetime | None) -> dt.datetime | None:
-        """Recusa carimbo de tempo absurdo.
+    def _horario(cls, v: dt.datetime | None) -> dt.datetime | None:
+        return validar_horario_plausivel(v)
 
-        Sem isso, um gateway comprometido poderia inserir posicao no futuro e
-        silenciar o alerta de perda de sinal para sempre, ou reescrever a
-        trilha do passado.
-        """
+
+class LeituraIn(BaseModel):
+    """Uma leitura dentro de um lote repassado pelo mestre.
+
+    Igual a `PosicaoIn`, menos o brinco identificador do gateway: quem se
+    autentica e o mestre, e ele carrega N leituras de N animais.
+    """
+
+    brinco: str = Field(min_length=1, max_length=15, pattern=r"^\d{1,15}$")
+    lat: float = Field(ge=-90, le=90)
+    lon: float = Field(ge=-180, le=180)
+    atividade: float = Field(default=0.5, ge=0, le=1)
+    bateria_pct: int = Field(default=100, ge=0, le=100)
+    registrada_em: dt.datetime | None = None
+    # Evento que o proprio brinco decidiu, com o poligono gravado nele. Quando
+    # vem preenchido, o servidor confia na histerese que ja rodou no dispositivo
+    # e abre o alerta sem esperar a segunda leitura.
+    evento: str | None = Field(default=None, max_length=20)
+
+    @field_validator("registrada_em")
+    @classmethod
+    def _horario(cls, v: dt.datetime | None) -> dt.datetime | None:
+        return validar_horario_plausivel(v)
+
+    @field_validator("evento")
+    @classmethod
+    def _evento_conhecido(cls, v: str | None) -> str | None:
         if v is None:
             return None
+        conhecidos = {"saiu_da_area", "voltou_para_area", "imovel", "movimentou"}
+        if v not in conhecidos:
+            raise ValueError(f"evento deve ser um de {sorted(conhecidos)}")
+        return v
 
-        momento = v if v.tzinfo else v.replace(tzinfo=dt.timezone.utc)
-        agora = dt.datetime.now(dt.timezone.utc)
 
-        # Alguma folga no futuro absorve relogio dessincronizado do dispositivo.
-        if momento > agora + dt.timedelta(minutes=5):
-            raise ValueError("registrada_em no futuro")
-        # Aceita ate 7 dias de atraso: o gateway pode ter ficado offline e estar
-        # descarregando um lote acumulado.
-        if momento < agora - dt.timedelta(days=7):
-            raise ValueError("registrada_em antiga demais")
+class LoteTelemetriaIn(BaseModel):
+    """Pacote que o mestre envia: varias leituras de uma vez.
 
-        return momento
+    O mestre acumula o que ouviu por radio e sobe tudo numa conexao so --
+    ligar o modem celular e o que mais gasta bateria dele.
+    """
+
+    leituras: list[LeituraIn] = Field(min_length=1, max_length=500)
+    # Bateria do proprio mestre, aproveitando a viagem.
+    bateria_mestre_pct: int | None = Field(default=None, ge=0, le=100)
+
+
+class LoteTelemetriaOut(BaseModel):
+    aceitas: int
+    recusadas: int
+    # Brincos que o mestre reportou e o servidor nao reconhece. O mestre pode
+    # parar de repassar esses para nao gastar radio a toa.
+    desconhecidos: list[str]
 
 
 class PosicaoOut(BaseModel):
@@ -113,9 +175,12 @@ class PosicaoOut(BaseModel):
 # ------------------------------------------------------------------- alerta
 class AlertaOut(BaseModel):
     id: int
-    animal_id: int
-    animal_nome: str
-    brinco: str
+    # Nulos quando o alerta e sobre o lote, e nao sobre um animal.
+    animal_id: int | None
+    animal_nome: str | None
+    brinco: str | None
+    pasto_id: int | None
+    pasto_nome: str | None
     tipo: str
     severidade: str
     mensagem: str
@@ -187,6 +252,85 @@ class UsuarioOut(BaseModel):
 class TrocarSenhaIn(BaseModel):
     senha_atual: str = Field(repr=False)
     senha_nova: str = Field(repr=False)
+
+
+# ----------------------------------------------------------------- mestres
+class HeartbeatIn(BaseModel):
+    bateria_pct: int = Field(ge=0, le=100)
+
+
+class HeartbeatOut(BaseModel):
+    """Resposta ao 'estou vivo' do mestre.
+
+    `voce_esta_ativo` e uma ordem, nao uma informacao: um mestre que descobre
+    aqui que foi substituido deve desligar o modem e voltar a escutar. Sem isso,
+    um mestre que ficou incomunicavel e voltou continuaria transmitindo em
+    paralelo com quem assumiu no lugar dele.
+    """
+
+    voce_esta_ativo: bool
+    proximo_heartbeat_s: int
+
+
+class AssumirOut(BaseModel):
+    assumiu: bool
+    motivo: str
+    # Preenchido quando o pedido e negado: quanto falta para o mestre atual ser
+    # considerado calado. Evita o reserva ficar perguntando de segundo em
+    # segundo e gastando bateria a toa.
+    tente_de_novo_em_s: int | None = None
+
+
+class MestreOut(BaseModel):
+    id: int
+    pasto_id: int | None
+    pasto_nome: str | None
+    animal_id: int | None
+    animal_nome: str | None
+    prefixo_chave: str
+    ativo: bool
+    bateria_pct: int
+    ultimo_heartbeat: dt.datetime | None
+    segundos_sem_heartbeat: int | None
+    trocas: int
+
+
+class MestreIn(BaseModel):
+    """Vincula uma chave de gateway existente a um animal e a um lote."""
+
+    chave_id: int
+    animal_id: int | None = None
+    pasto_id: int | None = None
+
+
+# ------------------------------------------------------------ configuracao
+class PastoConfigOut(BaseModel):
+    """O que o brinco precisa para avaliar a geocerca sozinho."""
+
+    id: int
+    pontos: list[tuple[float, float]]
+    buffer_m: float
+
+
+class AnimalConfigOut(BaseModel):
+    brinco: str
+    pasto_id: int | None
+
+
+class ConfigDispositivosOut(BaseModel):
+    """Configuracao que o mestre baixa e distribui por radio para o lote.
+
+    E o que permite a geocerca rodar no dispositivo: o poligono viaja uma vez,
+    e depois cada brinco decide sozinho se saiu, sem depender de enlace.
+    """
+
+    versao: str
+    intervalo_reporte_s: int
+    imobilidade_segundos: int
+    imobilidade_atividade_max: float
+    heartbeat_mestre_s: int
+    pastos: list[PastoConfigOut]
+    animais: list[AnimalConfigOut]
 
 
 # -------------------------------------------------------------------- push

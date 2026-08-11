@@ -10,6 +10,8 @@ const ROTULO_TIPO: Record<Alerta["tipo"], string> = {
   fora_da_area: "Fora da área",
   imovel: "Sem movimento",
   sem_sinal: "Sem sinal",
+  lote_sem_comunicacao: "Lote sem comunicação",
+  mestre_trocado: "Troca de brinco mestre",
 };
 
 function haQuantoTempo(iso: string): string {
@@ -40,9 +42,12 @@ export function FeedAlertas({ alertas, onResolver, onIrPara }: Props) {
             <div className="alerta-msg">{alerta.mensagem}</div>
             <div className="alerta-rodape">
               <span>{haQuantoTempo(alerta.criado_em)}</span>
-              <button className="botao-mini" onClick={() => onIrPara(alerta.animal_id)}>
-                ver no mapa
-              </button>
+              {/* Alerta de lote não tem animal para centralizar no mapa. */}
+              {alerta.animal_id !== null && (
+                <button className="botao-mini" onClick={() => onIrPara(alerta.animal_id!)}>
+                  ver no mapa
+                </button>
+              )}
               <button className="botao-mini" onClick={() => onResolver(alerta.id)}>
                 resolver
               </button>

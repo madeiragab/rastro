@@ -21,6 +21,7 @@ from app.config import settings
 from app.models import (
     ALERTA_FORA,
     ALERTA_IMOVEL,
+    ALERTA_LOTE_MUDO,
     ALERTA_SEM_SINAL,
     STATUS_FORA,
     STATUS_IMOVEL,
@@ -79,8 +80,22 @@ def _resolver(db: Session, animal_id: int, tipo: str) -> None:
 # --------------------------------------------------------------------------
 # Regra 1 e 2: avaliadas quando chega uma posicao nova.
 # --------------------------------------------------------------------------
-def avaliar_posicao(db: Session, animal: Animal, lat: float, lon: float, atividade: float) -> None:
-    """Roda as regras que dependem de uma leitura recem-chegada."""
+def avaliar_posicao(
+    db: Session,
+    animal: Animal,
+    lat: float,
+    lon: float,
+    atividade: float,
+    evento: str | None = None,
+) -> None:
+    """Roda as regras que dependem de uma leitura recem-chegada.
+
+    `evento` vem preenchido quando o proprio brinco decidiu -- ele carrega o
+    poligono e ja aplicou a histerese localmente. Nesse caso o servidor confia e
+    abre o alerta na primeira leitura, em vez de esperar a segunda: o
+    dispositivo teve acesso a uma serie de posicoes que o servidor nunca viu,
+    porque so transmite uma parte delas.
+    """
     momento = agora()
 
     # --- perda de sinal: chegou leitura, entao o enlace voltou.
@@ -92,12 +107,17 @@ def avaliar_posicao(db: Session, animal: Animal, lat: float, lon: float, ativida
         resultado = geofence.avaliar(db, animal.pasto, lat, lon)
         animal.distancia_pasto_m = resultado.distancia_m
 
-        if resultado.dentro:
+        if resultado.dentro and evento != "saiu_da_area":
             animal.leituras_fora = 0
             _resolver(db, animal.id, ALERTA_FORA)
         else:
             animal.leituras_fora += 1
-            # Histerese: uma unica leitura fora nao abre alerta.
+            # Histerese: uma unica leitura fora nao abre alerta -- a menos que o
+            # brinco ja tenha confirmado por conta propria.
+            if evento == "saiu_da_area":
+                animal.leituras_fora = max(
+                    animal.leituras_fora, settings.geofence_confirmacoes
+                )
             if animal.leituras_fora >= settings.geofence_confirmacoes:
                 fora_confirmado = True
                 _abrir(
@@ -151,12 +171,32 @@ def avaliar_posicao(db: Session, animal: Animal, lat: float, lon: float, ativida
 # --------------------------------------------------------------------------
 # Regra 3: avaliada por varredura, porque depende de ausencia de dado.
 # --------------------------------------------------------------------------
+def _alerta_de_lote_aberto(db: Session, pasto_id: int) -> Alerta | None:
+    db.flush()
+    return db.execute(
+        select(Alerta)
+        .where(
+            Alerta.pasto_id == pasto_id,
+            Alerta.tipo == ALERTA_LOTE_MUDO,
+            Alerta.resolvido_em.is_(None),
+        )
+        .limit(1)
+    ).scalar_one_or_none()
+
+
 def varrer_silencio(db: Session) -> int:
-    """Abre alerta para todo animal que passou tempo demais sem reportar.
+    """Abre alerta para quem passou tempo demais sem reportar.
 
     O limiar e relativo a periodicidade esperada do proprio dispositivo. Um
     limiar fixo global geraria ruido: a periodicidade varia por animal e por
     terreno.
+
+    **Silencio coletivo e tratado a parte.** Com a topologia de mestre, se o
+    brinco que repassa o lote cair, todos os animais daquele lote calam ao mesmo
+    tempo. Abrir um alerta por animal produziria vinte notificacoes de
+    madrugada dizendo que cada boi foi roubado -- falso, e o suficiente para o
+    produtor desinstalar o aplicativo. Vinte animais silenciando juntos e mestre
+    caido, nao vinte furtos simultaneos.
     """
     momento = agora()
     limite_s = max(
@@ -164,29 +204,76 @@ def varrer_silencio(db: Session) -> int:
         settings.sinal_silencio_minimo_s,
     )
 
-    abertos = 0
     animais = db.execute(select(Animal)).scalars().all()
 
+    # Agrupa por lote para decidir entre alerta individual e alerta de lote.
+    por_lote: dict[int | None, list[Animal]] = {}
+    calados: dict[int | None, list[Animal]] = {}
+
     for animal in animais:
+        por_lote.setdefault(animal.pasto_id, []).append(animal)
+
         if animal.ultimo_contato is None:
             continue
+        if (momento - animal.ultimo_contato).total_seconds() >= limite_s:
+            calados.setdefault(animal.pasto_id, []).append(animal)
 
-        silencio_s = (momento - animal.ultimo_contato).total_seconds()
-        if silencio_s < limite_s:
+    abertos = 0
+
+    for pasto_id, mudos in calados.items():
+        total = len(por_lote.get(pasto_id, []))
+        fracao = len(mudos) / total if total else 0.0
+
+        coletivo = (
+            pasto_id is not None
+            and total >= settings.lote_minimo_para_agrupar
+            and fracao >= settings.lote_fracao_muda
+        )
+
+        for animal in mudos:
+            animal.status = STATUS_OFFLINE
+
+        if coletivo:
+            # Um alerta para o lote inteiro, e nenhum por animal.
+            if _alerta_de_lote_aberto(db, pasto_id) is None:
+                nome = mudos[0].pasto.nome if mudos[0].pasto else "lote"
+                db.add(
+                    Alerta(
+                        animal_id=None,
+                        pasto_id=pasto_id,
+                        tipo=ALERTA_LOTE_MUDO,
+                        severidade="alta",
+                        mensagem=(
+                            f"{len(mudos)} de {total} animais de {nome} sem comunicação. "
+                            "Provável falha do brinco que repassa o lote — "
+                            "verificar antes de sair procurando gado."
+                        ),
+                    )
+                )
+                abertos += 1
             continue
 
-        animal.status = STATUS_OFFLINE
-        minutos = int(silencio_s // 60)
-        desde = f"{minutos} min" if minutos else f"{int(silencio_s)} s"
-        if _abrir(
-            db,
-            animal,
-            ALERTA_SEM_SINAL,
-            f"{animal.nome} sem comunicação há {desde}. "
-            "Verificar: brinco arrancado, bateria ou área sem propagação.",
-            severidade="media",
-        ):
-            abertos += 1
+        for animal in mudos:
+            silencio_s = (momento - animal.ultimo_contato).total_seconds()
+            minutos = int(silencio_s // 60)
+            desde = f"{minutos} min" if minutos else f"{int(silencio_s)} s"
+            if _abrir(
+                db,
+                animal,
+                ALERTA_SEM_SINAL,
+                f"{animal.nome} sem comunicação há {desde}. "
+                "Verificar: brinco arrancado, bateria ou área sem propagação.",
+                severidade="media",
+            ):
+                abertos += 1
+
+    # Lote que voltou a falar: fecha o alerta coletivo.
+    for pasto_id in list(por_lote):
+        if pasto_id is None or pasto_id in calados:
+            continue
+        aberto = _alerta_de_lote_aberto(db, pasto_id)
+        if aberto is not None:
+            aberto.resolvido_em = momento
 
     return abertos
 

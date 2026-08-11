@@ -50,3 +50,31 @@ def resolver_do_animal(animal_id: int, db: Session = Depends(get_db)) -> None:
 
     servico_alertas.resolver_todos(db, animal_id)
     db.commit()
+
+
+@router.post("/lote/{pasto_id}/resolver", status_code=204)
+def resolver_do_lote(pasto_id: int, db: Session = Depends(get_db)) -> None:
+    """Fecha os alertas de lote (mestre caido, lote mudo) de um pasto.
+
+    Se a causa persistir, o alerta reabre no proximo ciclo -- marcar como
+    resolvido nao conserta o mundo real.
+    """
+    from app.models import Pasto
+
+    if db.get(Pasto, pasto_id) is None:
+        raise HTTPException(status_code=404, detail="pasto nao encontrado")
+
+    abertos = (
+        db.execute(
+            select(Alerta).where(
+                Alerta.pasto_id == pasto_id,
+                Alerta.animal_id.is_(None),
+                Alerta.resolvido_em.is_(None),
+            )
+        )
+        .scalars()
+        .all()
+    )
+    for alerta in abertos:
+        alerta.resolvido_em = agora()
+    db.commit()

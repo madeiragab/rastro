@@ -110,6 +110,20 @@ class Settings(BaseSettings):
     sinal_fator_silencio: float = 4.0
     sinal_silencio_minimo_s: int = 60
 
+    # ------------------------------------------------------------- mestres
+    # Periodicidade com que o mestre em servico diz "estou vivo".
+    mestre_heartbeat_s: int = 60
+    mestre_heartbeat_s_producao: int = 900
+    # Quantas batidas perdidas antes de o servidor autorizar a troca. Baixo
+    # demais troca o mestre a cada chuva; alto demais atrasa a deteccao.
+    mestre_fator_silencio: float = 3.0
+
+    # A partir de que fracao do lote calada o alerta vira "lote sem
+    # comunicacao" em vez de N alertas de brinco. Vinte animais silenciando
+    # juntos e mestre caido, nao vinte roubos simultaneos.
+    lote_fracao_muda: float = 0.6
+    lote_minimo_para_agrupar: int = 3
+
     # ------------------------------------------------------------- simulador
     simulator_enabled: bool = True
     simulator_tick_s: float = 4.0
