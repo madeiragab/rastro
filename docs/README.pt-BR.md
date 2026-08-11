@@ -9,6 +9,7 @@
 | [Segurança](seguranca.md) | Modelo de ameaça, STRIDE, cada controle implementado com o motivo, e a lista honesta do que **não** está protegido |
 | [Registro de decisões](decisoes.md) | 16 ADRs: o que foi decidido, o que foi descartado, e por quê |
 | [Implantação](implantacao.md) | Colocar no ar num servidor Linux: domínio, TLS, SMTP, backup, atualização — e o que ainda falta para ser infraestrutura madura |
+| [Arquitetura de hardware](arquitetura-hardware.md) | O lado do campo, que ainda não existe: malha de rádio no rebanho, geocerca rodando no brinco, três mestres em rodízio, autonomia de bateria, custo unitário e preço |
 
 Comece pelo [README da raiz](../README.pt-BR.md) para instruções de execução e
 demonstração.

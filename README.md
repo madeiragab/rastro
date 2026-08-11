@@ -21,7 +21,8 @@ Mobile-first web app with a built-in herd simulator — runs with no hardware at
 
 📚 **[Full documentation](docs/README.md)** — [requirements](docs/requirements.md) ·
 [architecture](docs/architecture.md) · [security](docs/security.md) ·
-[decision log](docs/decisions.md) · [deployment](docs/deploy.md)
+[decision log](docs/decisions.md) · [deployment](docs/deploy.md) ·
+[hardware](docs/hardware-architecture.md)
 
 ---
 
