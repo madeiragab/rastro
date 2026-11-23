@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { api, ErroApi } from "../api";
+import { api, ErroApi, MODO_DEMO } from "../api";
 import { firebaseAtivo } from "../firebase";
 import type { Usuario } from "../types";
 
@@ -11,8 +11,10 @@ type Modo = "entrar" | "esqueci";
 
 export function TelaLogin({ onEntrou }: Props) {
   const [modo, setModo] = useState<Modo>("entrar");
-  const [email, setEmail] = useState("");
-  const [senha, setSenha] = useState("");
+  // Na demonstração a conta é conhecida e aparece na tela: não há segredo a
+  // proteger num banco que só existe dentro do celular.
+  const [email, setEmail] = useState(MODO_DEMO ? "produtor@rastro.com.br" : "");
+  const [senha, setSenha] = useState(MODO_DEMO ? "rastro2026" : "");
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
@@ -124,6 +126,12 @@ export function TelaLogin({ onEntrou }: Props) {
           </>
         )}
 
+        {MODO_DEMO && modo === "entrar" && (
+          <div className="erro sucesso" style={{ margin: 0 }} role="note">
+            Modo demonstração: tudo roda no celular, com banco próprio. Conta:
+            produtor@rastro.com.br · senha rastro2026
+          </div>
+        )}
         {descompasso && (
           <div className="erro" style={{ margin: 0 }} role="alert">
             {descompasso}

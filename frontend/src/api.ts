@@ -16,6 +16,12 @@ import type {
 import * as fb from "./firebase";
 
 /**
+ * Modo demonstração (`VITE_MODO_DEMO=1` no build): não existe servidor. As
+ * rotas são respondidas por `demo/servidor.ts`, com banco SQLite no aparelho.
+ */
+export const MODO_DEMO = import.meta.env.VITE_MODO_DEMO === "1";
+
+/**
  * Onde está a API. No navegador é a mesma origem ("/api", via proxy do Vite,
  * do nginx ou do Firebase Hosting). No APK o app roda em https://localhost,
  * então precisa do endereço completo — `VITE_API_URL` no build.
@@ -107,6 +113,20 @@ async function pedir<T>(
   init: RequestInit = {},
   jaRenovou = false,
 ): Promise<T> {
+  if (MODO_DEMO) {
+    const { responder, ErroDemo } = await import("./demo/servidor");
+    try {
+      const corpo = typeof init.body === "string" ? JSON.parse(init.body) : null;
+      return (await responder((init.method ?? "GET").toUpperCase(), caminho, corpo)) as T;
+    } catch (erro) {
+      if (erro instanceof ErroDemo) {
+        if (erro.status === 401 && !caminho.startsWith("/auth/")) aoPerderSessao?.();
+        throw new ErroApi(erro.status, erro.message);
+      }
+      throw erro;
+    }
+  }
+
   const cabecalhos: Record<string, string> = {
     ...(init.body ? { "Content-Type": "application/json" } : {}),
     ...((init.headers as Record<string, string>) ?? {}),
@@ -176,6 +196,10 @@ export const api = {
 
   /** Restaura a sessão na carga da página, usando o cookie de refresh. */
   async restaurarSessao(): Promise<Usuario | null> {
+    if (MODO_DEMO) {
+      const { restaurar } = await import("./demo/servidor");
+      return (await restaurar()) as Usuario | null;
+    }
     if (fb.firebaseAtivo) {
       if (!(await fb.usuarioAtual().catch(() => null))) return null;
       try {

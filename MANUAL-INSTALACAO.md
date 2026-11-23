@@ -9,6 +9,48 @@ na nuvem e gerar o app Android. No fim há uma seção grande de **erros comuns*
 
 ---
 
+## Atalho: só instalar e mostrar (APK de demonstração)
+
+O **`Rastro-demo.apk`** da página de
+[Releases](https://github.com/madeiragab/rastro/releases) funciona **sozinho
+no celular**: sem servidor, sem PC e sem Firebase. Ele traz junto:
+
+- um **banco SQLite** dentro do app, com a fazenda, os 2 pastos e os 14
+  animais. O que você muda (pastos novos, alertas, contas da equipe) fica
+  salvo mesmo depois de fechar o app;
+- o **simulador** do rebanho e as mesmas regras de alerta da API (geocerca,
+  imobilidade, perda de sinal).
+
+Instale ([seção 11](#11-instalar-o-apk-no-celular)), abra e toque em
+**Entrar**: a conta já vem preenchida (`produtor@rastro.com.br` /
+`rastro2026`). Para demonstrar, escolha um animal na aba **Rebanho**, vá em
+**Simular › Fugir do pasto** e, em ~25 s, o alerta aparece e o celular vibra.
+
+> O fundo do mapa (ruas) vem da internet. Sem internet, o rebanho e os pastos
+> aparecem do mesmo jeito, mas sobre um fundo cinza.
+
+Para gerar de novo:
+
+```powershell
+cd frontend
+```
+
+```powershell
+npm run build -- --mode demo
+```
+
+```powershell
+npx cap sync android
+```
+
+```powershell
+cd android; .\gradlew.bat assembleRelease
+```
+
+O modo vem do arquivo `frontend/.env.demo` (`VITE_MODO_DEMO=1`). O código fica
+em `frontend/src/demo/`: `banco.ts` (SQLite), `simulador.ts` (regras) e
+`servidor.ts` (as rotas da API respondidas no aparelho).
+
 ## Atalho: seu PC como servidor, acessível de qualquer lugar
 
 O script `hospedar.ps1` coloca o Rastro no ar usando o seu PC. Ele sobe o
