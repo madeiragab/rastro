@@ -27,6 +27,9 @@ PUBLICAS = {
     # se autenticar para pedir a redefinição.
     ("POST", "/api/auth/esqueci"),
     ("POST", "/api/auth/redefinir"),
+    # Diz ao app qual tela de login mostrar (local ou Firebase) -- precisa
+    # vir antes do login, e responde so o nome do modo.
+    ("GET", "/api/auth/modo"),
     # Sondas de infraestrutura: precisam responder sem credencial, senão o
     # orquestrador não consegue saber se o serviço está de pé.
     ("GET", "/health"),
