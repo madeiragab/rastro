@@ -17,6 +17,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.database import get_db
 from app.models import NIVEL_PAPEL, ChaveGateway, Usuario, agora
 from app.security import chaves, tokens
@@ -56,6 +57,9 @@ def usuario_atual(
     if credencial is None or credencial.scheme.lower() != "bearer":
         raise _nao_autorizado()
 
+    if settings.login_firebase:
+        return _usuario_firebase(credencial.credentials, db)
+
     try:
         claims = tokens.ler_access_token(credencial.credentials)
     except tokens.TokenInvalido:
@@ -72,6 +76,45 @@ def usuario_atual(
     if int(claims.get("ver", -1)) != usuario.token_versao:
         raise _nao_autorizado()
 
+    return usuario
+
+
+def _usuario_firebase(token: str, db: Session) -> Usuario:
+    """Resolve o ID token do Firebase para a conta do Rastro.
+
+    O Firebase so diz **quem** e a pessoa. Papel e fazenda continuam vindo da
+    tabela `usuarios`: ter conta no Firebase do projeto nao da acesso a nada
+    sem um cadastro feito pelo dono da fazenda.
+    """
+    from app.security import firebase
+
+    try:
+        claims = firebase.verificar_id_token(token)
+    except firebase.TokenFirebaseInvalido:
+        raise _nao_autorizado() from None
+
+    uid = claims.get("uid") or claims.get("sub")
+    usuario = db.execute(select(Usuario).where(Usuario.firebase_uid == uid)).scalar_one_or_none()
+
+    if usuario is None:
+        # Primeiro acesso de uma conta criada fora da API (ex.: pelo console do
+        # Firebase): vincula pelo e-mail, mas SO se o Firebase atesta que o
+        # e-mail e dela. Sem essa trava, qualquer um criaria uma conta no
+        # Firebase com o e-mail do dono e herdaria a fazenda.
+        email = (claims.get("email") or "").lower()
+        if not email or not claims.get("email_verified"):
+            raise _nao_autorizado()
+        usuario = db.execute(
+            select(Usuario).where(Usuario.email == email, Usuario.firebase_uid.is_(None))
+        ).scalar_one_or_none()
+        if usuario is None:
+            raise _nao_autorizado()
+        usuario.firebase_uid = uid
+        usuario.ultimo_login_em = agora()
+        db.commit()
+
+    if not usuario.ativo:
+        raise _nao_autorizado()
     return usuario
 
 

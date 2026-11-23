@@ -26,6 +26,8 @@ App web mobile-first com simulador de rebanho embutido — roda sem hardware nen
 [hardware](docs/arquitetura-hardware.md) ·
 [protocolo](docs/protocolo-dispositivos.md)
 
+📱 **[Manual de instalação, Firebase e APK](MANUAL-INSTALACAO.md)** — rodar na máquina, publicar no Firebase/Cloud Run, gerar o app Android e erros comuns.
+
 ---
 
 ## Subir

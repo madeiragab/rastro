@@ -13,8 +13,14 @@ import type {
   Usuario,
   UsuarioCriado,
 } from "./types";
+import * as fb from "./firebase";
 
-const BASE = "/api";
+/**
+ * Onde está a API. No navegador é a mesma origem ("/api", via proxy do Vite,
+ * do nginx ou do Firebase Hosting). No APK o app roda em https://localhost,
+ * então precisa do endereço completo — `VITE_API_URL` no build.
+ */
+const BASE = ((import.meta.env.VITE_API_URL as string | undefined) || "/api").replace(/\/$/, "");
 
 /**
  * O access token vive **apenas em memória**.
@@ -105,7 +111,14 @@ async function pedir<T>(
     ...(init.body ? { "Content-Type": "application/json" } : {}),
     ...((init.headers as Record<string, string>) ?? {}),
   };
-  if (accessToken) cabecalhos.Authorization = `Bearer ${accessToken}`;
+  if (fb.firebaseAtivo) {
+    // Login pelo Firebase: o SDK renova o ID token sozinho; `forcar` só no
+    // segundo tiro, depois de um 401 (relógio do aparelho adiantado, revogação).
+    const token = await fb.idToken(jaRenovou).catch(() => null);
+    if (token) cabecalhos.Authorization = `Bearer ${token}`;
+  } else if (accessToken) {
+    cabecalhos.Authorization = `Bearer ${accessToken}`;
+  }
 
   const resposta = await fetch(`${BASE}${caminho}`, {
     credentials: "same-origin",
@@ -115,7 +128,8 @@ async function pedir<T>(
 
   // Access token expirado: renova uma vez e repete. `jaRenovou` impede laço
   // infinito quando o refresh também não vale mais.
-  if (resposta.status === 401 && !jaRenovou && !caminho.startsWith("/auth/")) {
+  if (resposta.status === 401 && !jaRenovou && (fb.firebaseAtivo || !caminho.startsWith("/auth/"))) {
+    if (fb.firebaseAtivo) return pedir<T>(caminho, init, true);
     if (await renovar()) return pedir<T>(caminho, init, true);
     accessToken = null;
     aoPerderSessao?.();
@@ -130,6 +144,28 @@ async function pedir<T>(
 export const api = {
   // ------------------------------------------------------------ sessão
   async login(email: string, senha: string): Promise<RespostaLogin> {
+    if (fb.firebaseAtivo) {
+      const [auth, { signInWithEmailAndPassword }] = await Promise.all([
+        fb.obterAuth(),
+        import("firebase/auth"),
+      ]);
+      try {
+        await signInWithEmailAndPassword(auth, email, senha);
+      } catch (erro) {
+        throw new ErroApi(401, fb.mensagemDeErro(erro));
+      }
+      try {
+        const usuario = await pedir<Usuario>("/auth/eu");
+        return { access_token: "", token_type: "bearer", expira_em_s: 3600, usuario };
+      } catch (erro) {
+        // Entrou no Firebase mas não tem cadastro nesta fazenda.
+        await auth.signOut();
+        if (erro instanceof ErroApi && erro.status === 401) {
+          throw new ErroApi(401, "conta sem acesso a nenhuma fazenda. Peça ao dono para cadastrar seu e-mail.");
+        }
+        throw erro;
+      }
+    }
     const dados = await pedir<RespostaLogin>("/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, senha }),
@@ -140,6 +176,14 @@ export const api = {
 
   /** Restaura a sessão na carga da página, usando o cookie de refresh. */
   async restaurarSessao(): Promise<Usuario | null> {
+    if (fb.firebaseAtivo) {
+      if (!(await fb.usuarioAtual().catch(() => null))) return null;
+      try {
+        return await pedir<Usuario>("/auth/eu");
+      } catch {
+        return null;
+      }
+    }
     if (!(await renovar())) return null;
     try {
       return await pedir<Usuario>("/auth/eu");
@@ -149,6 +193,11 @@ export const api = {
   },
 
   async logout(): Promise<void> {
+    if (fb.firebaseAtivo) {
+      const auth = await fb.obterAuth();
+      await auth.signOut();
+      return;
+    }
     try {
       await pedir<void>("/auth/logout", {
         method: "POST",
@@ -159,18 +208,56 @@ export const api = {
     }
   },
 
-  trocarSenha: (senha_atual: string, senha_nova: string) =>
-    pedir<void>("/auth/senha", {
+  async trocarSenha(senha_atual: string, senha_nova: string): Promise<void> {
+    if (fb.firebaseAtivo) {
+      // Mesma régua do login local: 12+ caracteres.
+      if (senha_nova.length < 12) throw new ErroApi(422, "a senha precisa ter pelo menos 12 caracteres");
+      const auth = await fb.obterAuth();
+      const m = await import("firebase/auth");
+      const atual = auth.currentUser;
+      if (!atual?.email) throw new ErroApi(401, "sessão expirada");
+      try {
+        await m.reauthenticateWithCredential(atual, m.EmailAuthProvider.credential(atual.email, senha_atual));
+      } catch {
+        throw new ErroApi(400, "senha atual incorreta");
+      }
+      try {
+        await m.updatePassword(atual, senha_nova);
+      } catch (erro) {
+        throw new ErroApi(422, fb.mensagemDeErro(erro));
+      }
+      return;
+    }
+    return pedir<void>("/auth/senha", {
       method: "POST",
       body: JSON.stringify({ senha_atual, senha_nova }),
-    }),
+    });
+  },
 
   /** Responde 202 exista ou não a conta — a resposta não confirma cadastro. */
-  esqueciSenha: (email: string) =>
-    pedir<{ detail: string }>("/auth/esqueci", {
+  async esqueciSenha(email: string): Promise<{ detail: string }> {
+    if (fb.firebaseAtivo) {
+      const [auth, { sendPasswordResetEmail }] = await Promise.all([
+        fb.obterAuth(),
+        import("firebase/auth"),
+      ]);
+      // Erro de "conta não existe" é engolido de propósito: a resposta não
+      // pode confirmar cadastro. Só falha de rede chega à pessoa.
+      await sendPasswordResetEmail(auth, email).catch((erro) => {
+        if ((erro as { code?: string })?.code === "auth/network-request-failed") {
+          throw new ErroApi(0, fb.mensagemDeErro(erro));
+        }
+      });
+      return { detail: "ok" };
+    }
+    return pedir<{ detail: string }>("/auth/esqueci", {
       method: "POST",
       body: JSON.stringify({ email }),
-    }),
+    });
+  },
+
+  /** Qual login o backend espera. Público. */
+  modoAuth: () => pedir<{ modo: "local" | "firebase" }>("/auth/modo"),
 
   redefinirSenha: (token: string, senha_nova: string) =>
     pedir<void>("/auth/redefinir", {
@@ -183,6 +270,12 @@ export const api = {
 
   inscreverPush: (dados: { endpoint: string; chave_p256dh: string; chave_auth: string }) =>
     pedir<unknown>("/push/inscricoes", { method: "POST", body: JSON.stringify(dados) }),
+
+  registrarFcm: (token: string) =>
+    pedir<void>("/push/fcm", { method: "POST", body: JSON.stringify({ token, plataforma: "android" }) }),
+
+  cancelarFcm: (token: string) =>
+    pedir<void>("/push/fcm", { method: "DELETE", body: JSON.stringify({ token, plataforma: "android" }) }),
 
   cancelarPush: (dados: { endpoint: string; chave_p256dh: string; chave_auth: string }) =>
     pedir<void>("/push/inscricoes", { method: "DELETE", body: JSON.stringify(dados) }),

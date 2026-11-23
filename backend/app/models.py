@@ -202,6 +202,10 @@ class Usuario(Base):
     # troca a senha por suspeita de invasao quer fechar.
     token_versao: Mapped[int] = mapped_column(Integer, default=0)
 
+    # Conta correspondente no Firebase Authentication (so no AUTH_MODO=firebase).
+    # O vinculo e pelo uid, que nunca muda, e nao pelo e-mail, que muda.
+    firebase_uid: Mapped[str | None] = mapped_column(String(128), unique=True, nullable=True)
+
     fazenda: Mapped[Fazenda | None] = relationship()
 
 
@@ -340,6 +344,27 @@ class InscricaoPush(Base):
     user_agent: Mapped[str] = mapped_column(String(255), default="")
 
     criada_em: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=agora)
+    ultimo_envio: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    falhas: Mapped[int] = mapped_column(Integer, default=0)
+
+    usuario: Mapped[Usuario] = relationship()
+
+
+class TokenFcm(Base):
+    """Token de registro do Firebase Cloud Messaging de um aparelho Android.
+
+    E o equivalente nativo da `InscricaoPush`: o app instalado recebe um token
+    do FCM e o servidor manda o alerta para ele. Um token por instalacao.
+    """
+
+    __tablename__ = "tokens_fcm"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    usuario_id: Mapped[int] = mapped_column(ForeignKey("usuarios.id", ondelete="CASCADE"), index=True)
+    token: Mapped[str] = mapped_column(Text, unique=True)
+    plataforma: Mapped[str] = mapped_column(String(20), default="android")
+
+    criado_em: Mapped[dt.datetime] = mapped_column(DateTime(timezone=True), default=agora)
     ultimo_envio: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     falhas: Mapped[int] = mapped_column(Integer, default=0)
 

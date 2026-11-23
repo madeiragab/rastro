@@ -1,17 +1,26 @@
 import { useEffect, useState } from "react";
-import * as push from "../push";
+import * as pushWeb from "../push";
+import * as nativo from "../nativo";
 
-const EXPLICACAO: Record<push.EstadoPush, string> = {
+// No APK o push é nativo (FCM); no navegador, Web Push. Mesma interface.
+const push = nativo.ehNativo
+  ? { estado: nativo.estadoPush, ativar: nativo.ativarPush, desativar: nativo.desativarPush }
+  : pushWeb;
+type EstadoPush = pushWeb.EstadoPush;
+
+const EXPLICACAO: Record<EstadoPush, string> = {
   ativo: "Este aparelho recebe alerta mesmo com o app fechado.",
   desativado: "Hoje o alerta só aparece com o app aberto.",
-  negado:
-    "As notificações foram bloqueadas para este site. Para reativar, libere nas configurações do navegador.",
-  indisponivel:
-    "Este navegador não permite notificação aqui. Push exige HTTPS — em rede local, sem certificado, não funciona.",
+  negado: nativo.ehNativo
+    ? "As notificações do Rastro estão bloqueadas. Libere em Configurações > Apps > Rastro > Notificações."
+    : "As notificações foram bloqueadas para este site. Para reativar, libere nas configurações do navegador.",
+  indisponivel: nativo.ehNativo
+    ? "Push indisponível neste build: falta configurar o Firebase (google-services.json)."
+    : "Este navegador não permite notificação aqui. Push exige HTTPS — em rede local, sem certificado, não funciona.",
 };
 
 export function PainelNotificacoes() {
-  const [estado, setEstado] = useState<push.EstadoPush>("desativado");
+  const [estado, setEstado] = useState<EstadoPush>("desativado");
   const [ocupado, setOcupado] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 

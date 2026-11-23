@@ -8,8 +8,8 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import usuario_atual
 from app.database import get_db
-from app.models import InscricaoPush, Usuario
-from app.schemas import ChavePublicaOut, InscricaoPushIn, InscricaoPushOut
+from app.models import InscricaoPush, TokenFcm, Usuario
+from app.schemas import ChavePublicaOut, InscricaoPushIn, InscricaoPushOut, TokenFcmIn
 from app.services import push
 
 router = APIRouter(prefix="/push", tags=["push"])
@@ -78,5 +78,39 @@ def cancelar(
             InscricaoPush.endpoint == payload.endpoint,
             InscricaoPush.usuario_id == usuario.id,
         )
+    )
+    db.commit()
+
+
+# ------------------------------------------------------------- FCM (Android)
+@router.post("/fcm", status_code=status.HTTP_204_NO_CONTENT)
+def registrar_fcm(
+    payload: TokenFcmIn,
+    usuario: Usuario = Depends(usuario_atual),
+    db: Session = Depends(get_db),
+) -> None:
+    """Registra o token FCM deste aparelho para a conta logada.
+
+    Mesmo raciocinio das inscricoes web: o token e a chave, e passa a ser de
+    quem registrou por ultimo (troca de conta no mesmo celular).
+    """
+    existente = db.execute(select(TokenFcm).where(TokenFcm.token == payload.token)).scalar_one_or_none()
+    if existente is not None:
+        existente.usuario_id = usuario.id
+        existente.plataforma = payload.plataforma
+        existente.falhas = 0
+    else:
+        db.add(TokenFcm(usuario_id=usuario.id, token=payload.token, plataforma=payload.plataforma))
+    db.commit()
+
+
+@router.delete("/fcm", status_code=status.HTTP_204_NO_CONTENT)
+def cancelar_fcm(
+    payload: TokenFcmIn,
+    usuario: Usuario = Depends(usuario_atual),
+    db: Session = Depends(get_db),
+) -> None:
+    db.execute(
+        delete(TokenFcm).where(TokenFcm.token == payload.token, TokenFcm.usuario_id == usuario.id)
     )
     db.commit()

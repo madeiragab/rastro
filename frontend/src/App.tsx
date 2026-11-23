@@ -1,6 +1,7 @@
 import type { Map as MapaLeaflet } from "leaflet";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api, definirToken, ErroApi, registrarPerdaDeSessao } from "./api";
+import * as nativo from "./nativo";
 import { FeedAlertas } from "./components/FeedAlertas";
 import { FolhaInferior, type Posicao as PosicaoFolha } from "./components/FolhaInferior";
 import { ListaAnimais } from "./components/ListaAnimais";
@@ -68,7 +69,16 @@ export default function App() {
       .finally(() => setVerificandoSessao(false));
   }, []);
 
+  // Toda vez que alguém entra (login ou sessão restaurada): no APK, liga o
+  // push nativo e registra o token deste aparelho para esta conta.
+  const usuarioId = usuario?.id ?? null;
+  useEffect(() => {
+    if (usuarioId !== null) nativo.aoEntrar();
+  }, [usuarioId]);
+
   async function sair() {
+    // Antes do logout: cancelar o token FCM ainda precisa da sessão.
+    await nativo.aoSair();
     await api.logout().catch(() => undefined);
     setUsuario(null);
     setFazenda(null);
@@ -164,6 +174,7 @@ export default function App() {
   async function resolverAlerta(alertaId: number) {
     setAlertas((atuais) => atuais.filter((a) => a.id !== alertaId));
     await api.resolverAlerta(alertaId).catch(() => undefined);
+    nativo.evento("alerta_resolvido");
     await carregar();
   }
 

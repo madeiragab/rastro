@@ -25,6 +25,8 @@ Mobile-first web app with a built-in herd simulator — runs with no hardware at
 [hardware](docs/hardware-architecture.md) ·
 [device protocol](docs/device-protocol.md)
 
+📱 **[Install manual, Firebase & APK (pt-BR)](MANUAL-INSTALACAO.md)** — run locally, deploy to Firebase/Cloud Run, build the Android app, common errors.
+
 ---
 
 ## Quick start

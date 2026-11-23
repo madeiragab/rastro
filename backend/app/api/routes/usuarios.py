@@ -15,7 +15,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.config import segredo_aleatorio
+from app.config import segredo_aleatorio, settings
 from app.database import get_db
 from app.api.deps import exige_papel, ip_do_cliente
 from app.models import PAPEL_DONO, Usuario, agora
@@ -74,6 +74,10 @@ def criar(
         senha_hash=senhas.gerar_hash(senha),
         papel=payload.papel,
     )
+    if settings.login_firebase:
+        from app.security import firebase
+
+        usuario.firebase_uid = firebase.garantir_conta(email, senha, payload.nome)
     db.add(usuario)
 
     auditoria.registrar(
@@ -115,10 +119,18 @@ def alterar(
         # O papel viaja dentro do access token. Sem incrementar a versao, um
         # rebaixamento so valeria quando o token atual expirasse.
         alvo.token_versao += 1
+        if settings.login_firebase and alvo.firebase_uid:
+            from app.security import firebase
+
+            firebase.revogar_sessoes(alvo.firebase_uid)
 
     if payload.ativo is not None and payload.ativo != alvo.ativo:
         mudancas.append("ativado" if payload.ativo else "desativado")
         alvo.ativo = payload.ativo
+        if settings.login_firebase and alvo.firebase_uid:
+            from app.security import firebase
+
+            firebase.definir_ativo(alvo.firebase_uid, payload.ativo)
         if not payload.ativo:
             alvo.token_versao += 1
             _revogar_sessoes(db, alvo)

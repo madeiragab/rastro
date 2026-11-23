@@ -10,6 +10,9 @@ export default defineConfig({
     host: "0.0.0.0",
     port: 5173,
     watch: { usePolling: true },
+    // Túnel da Cloudflare (hospedar.ps1): o Vite recusa nome de host que não
+    // conhece, e o endereço público do túnel muda a cada execução.
+    allowedHosts: [".trycloudflare.com"],
     proxy: {
       "/api": { target, changeOrigin: true },
       // Prefixo, para /health/pronto também ir para a API.

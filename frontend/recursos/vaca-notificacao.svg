@@ -1,0 +1,20 @@
+<!-- Silhueta branca para a barra de notificacao (o Android pinta de uma cor so). -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+    <mask id="furos">
+      <rect width="1024" height="1024" fill="#fff"/>
+      <ellipse cx="428" cy="474" rx="40" ry="46" fill="#000"/>
+      <ellipse cx="596" cy="474" rx="40" ry="46" fill="#000"/>
+      <ellipse cx="452" cy="636" rx="26" ry="36" fill="#000"/>
+      <ellipse cx="572" cy="636" rx="26" ry="36" fill="#000"/>
+    </mask>
+  </defs>
+  <g fill="#fff" mask="url(#furos)">
+    <path d="M418 318 C 400 270 372 236 330 222 C 346 262 360 300 386 336 Z"/>
+    <path d="M606 318 C 624 270 652 236 694 222 C 678 262 664 300 638 336 Z"/>
+    <ellipse cx="262" cy="430" rx="100" ry="54" transform="rotate(-24 262 430)"/>
+    <ellipse cx="762" cy="430" rx="100" ry="54" transform="rotate(24 762 430)"/>
+    <path d="M512 270 C 650 270 724 360 724 470 C 724 560 690 610 650 640 L 374 640 C 334 610 300 560 300 470 C 300 360 374 270 512 270 Z"/>
+    <ellipse cx="512" cy="646" rx="186" ry="124"/>
+  </g>
+</svg>

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="rastro_verde">#2E9E63</color>
+    <color name="rastro_fundo">#0F1417</color>
+    <color name="colorPrimary">#0F1417</color>
+    <color name="colorPrimaryDark">#0F1417</color>
+    <color name="colorAccent">#2E9E63</color>
+</resources>

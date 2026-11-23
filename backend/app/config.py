@@ -42,6 +42,20 @@ class Settings(BaseSettings):
     cors_origins: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
 
     # ---------------------------------------------------------- autenticacao
+    # "local": login proprio (Argon2id + refresh em cookie HttpOnly). Default.
+    # "firebase": o app entra pelo Firebase Authentication e a API so valida o
+    # ID token. Obrigatorio para o APK, que roda fora da origem da API e por
+    # isso nao recebe cookie SameSite=strict.
+    auth_modo: str = "local"
+
+    # ------------------------------------------------------------ firebase
+    # Com o projeto definido, a API envia alerta por FCM (push nativo no
+    # Android) mesmo no modo de login local.
+    firebase_projeto_id: str = ""
+    # Caminho do JSON da conta de servico. Vazio = credencial padrao do
+    # ambiente (no Cloud Run, a conta de servico do proprio servico).
+    firebase_credenciais: str = ""
+
     secret_key: str = SEGREDO_DEV
     jwt_algoritmo: str = "HS256"
     jwt_emissor: str = "rastro"
@@ -144,6 +158,11 @@ class Settings(BaseSettings):
     def _travas_de_producao(self) -> "Settings":
         producao = self.ambiente.lower().startswith("prod")
 
+        if self.auth_modo not in ("local", "firebase"):
+            raise RuntimeError('AUTH_MODO precisa ser "local" ou "firebase".')
+        if self.auth_modo == "firebase" and not self.firebase_projeto_id:
+            raise RuntimeError("AUTH_MODO=firebase exige FIREBASE_PROJETO_ID.")
+
         if producao:
             if self.secret_key == SEGREDO_DEV or len(self.secret_key) < 32:
                 raise RuntimeError(
@@ -157,7 +176,7 @@ class Settings(BaseSettings):
                 raise RuntimeError("CORS_ORIGINS contem origem http:// nao-local em producao.")
             if self.simulator_enabled:
                 raise RuntimeError("SIMULATOR_ENABLED precisa ser false em producao.")
-            if not self.smtp_host:
+            if self.auth_modo == "local" and not self.smtp_host:
                 raise RuntimeError(
                     "SMTP_HOST ausente. Sem envio de e-mail, quem esquecer a senha "
                     "perde a conta -- o link de redefinicao iria para o log do servidor."
@@ -175,6 +194,14 @@ class Settings(BaseSettings):
     @property
     def em_producao(self) -> bool:
         return self.ambiente.lower().startswith("prod")
+
+    @property
+    def login_firebase(self) -> bool:
+        return self.auth_modo == "firebase"
+
+    @property
+    def firebase_configurado(self) -> bool:
+        return bool(self.firebase_projeto_id)
 
 
 settings = Settings()

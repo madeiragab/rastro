@@ -14,3 +14,15 @@ dist/
 *.log
 .vite/
 .pytest_cache/
+
+# Firebase / Cloud Run
+.firebaserc
+.firebase/
+firebase-debug.log
+.env.cloudrun
+*-firebase-adminsdk-*.json
+google-services.json
+
+# Hospedagem pelo PC (hospedar.ps1)
+endereco-publico.txt
+*.apk

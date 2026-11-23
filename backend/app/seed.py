@@ -152,6 +152,18 @@ def _criar_acesso_inicial(db: Session, fazenda: Fazenda) -> None:
         senha_hash=senhas.gerar_hash(senha),
         papel=PAPEL_DONO,
     )
+
+    aviso_firebase = ""
+    if settings.login_firebase:
+        # A conta tambem precisa existir no Firebase Auth, senao ninguem entra.
+        # Se ja existia la, a senha de la vale -- a sorteada aqui e ignorada.
+        from app.security import firebase
+
+        usuario.firebase_uid = firebase.garantir_conta(usuario.email, senha, usuario.nome)
+        aviso_firebase = (
+            "\n Login pelo Firebase. Se este e-mail ja existia no Firebase,\n"
+            " vale a senha antiga de la, nao a mostrada acima.\n"
+        )
     db.add(usuario)
 
     chave, prefixo, hash_ = chaves.gerar()
@@ -177,8 +189,10 @@ def _criar_acesso_inicial(db: Session, fazenda: Fazenda) -> None:
         "----------------------------------------------------------\n"
         " Troque a senha no primeiro acesso. Em producao, defina\n"
         " ADMIN_SENHA no ambiente e nao use a senha sorteada.\n"
+        "%s"
         "==========================================================",
         usuario.email,
         senha,
         chave,
+        aviso_firebase,
     )

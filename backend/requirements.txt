@@ -18,3 +18,6 @@ pyjwt>=2.9,<3.0
 
 # --- notificacao push (Web Push / VAPID) ---
 pywebpush>=2.0,<3.0
+
+# --- Firebase (login pelo Firebase Auth e push nativo via FCM) ---
+firebase-admin>=6.5,<8.0

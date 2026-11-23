@@ -351,6 +351,11 @@ class InscricaoPushOut(BaseModel):
     ultimo_envio: dt.datetime | None
 
 
+class TokenFcmIn(BaseModel):
+    token: str = Field(min_length=20, max_length=4096)
+    plataforma: str = Field(default="android", pattern="^(android|ios)$")
+
+
 class EsqueciSenhaIn(BaseModel):
     email: EmailStr
 

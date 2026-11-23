@@ -1,10 +1,69 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
-  <rect width="192" height="192" rx="42" fill="#0F1417"/>
-  <!-- trilha: o rastro que o animal deixa -->
-  <path d="M44 140 C 68 120, 62 92, 86 76 S 128 60, 148 48"
-        fill="none" stroke="#2E9E63" stroke-width="9"
-        stroke-linecap="round" stroke-dasharray="2 22"/>
-  <circle cx="44" cy="140" r="9" fill="#2E9E63" opacity="0.45"/>
-  <circle cx="148" cy="48" r="15" fill="#2E9E63"/>
-  <circle cx="148" cy="48" r="27" fill="none" stroke="#2E9E63" stroke-width="5" opacity="0.5"/>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#3DBB78"/><stop offset="1" stop-color="#1F7A4A"/>
+  </linearGradient></defs><rect width="1024" height="1024" rx="224" fill="url(#bg)"/><g transform="translate(512 530) scale(0.92) translate(-512 -512)">
+  <defs>
+    <clipPath id="cabeca">
+      <path d="M512 270 C 650 270 724 360 724 470 C 724 560 690 610 650 640 L 374 640 C 334 610 300 560 300 470 C 300 360 374 270 512 270 Z"/>
+    </clipPath>
+    <radialGradient id="rosto" cx="50%" cy="38%" r="70%">
+      <stop offset="0" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#F1ECE2"/>
+    </radialGradient>
+    <linearGradient id="focinho" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFC8D2"/>
+      <stop offset="1" stop-color="#F4A3B4"/>
+    </linearGradient>
+  </defs>
+
+  <!-- chifres -->
+  <path d="M418 318 C 400 270 372 236 330 222 C 346 262 360 300 386 336 Z" fill="#F6E3B4" stroke="#D9BF83" stroke-width="10" stroke-linejoin="round"/>
+  <path d="M606 318 C 624 270 652 236 694 222 C 678 262 664 300 638 336 Z" fill="#F6E3B4" stroke="#D9BF83" stroke-width="10" stroke-linejoin="round"/>
+
+  <!-- orelhas -->
+  <g transform="rotate(-24 262 430)">
+    <ellipse cx="262" cy="430" rx="96" ry="50" fill="#F1ECE2" stroke="#2A2A2A" stroke-width="12"/>
+    <ellipse cx="272" cy="432" rx="60" ry="26" fill="#F7B3C2"/>
+  </g>
+  <g transform="rotate(24 762 430)">
+    <ellipse cx="762" cy="430" rx="96" ry="50" fill="#F1ECE2" stroke="#2A2A2A" stroke-width="12"/>
+    <ellipse cx="752" cy="432" rx="60" ry="26" fill="#F7B3C2"/>
+  </g>
+
+  <!-- brinco rastreador na orelha direita -->
+  <line x1="790" y1="470" x2="796" y2="512" stroke="#2A2A2A" stroke-width="10" stroke-linecap="round"/>
+  <rect x="756" y="506" width="84" height="76" rx="18" fill="#F7C531" stroke="#2A2A2A" stroke-width="10"/>
+  <circle cx="798" cy="546" r="12" fill="#2E9E63"/>
+  <path d="M820 520 A 32 32 0 0 1 820 572" fill="none" stroke="#2E9E63" stroke-width="7" stroke-linecap="round"/>
+
+  <!-- cabeca -->
+  <path d="M512 270 C 650 270 724 360 724 470 C 724 560 690 610 650 640 L 374 640 C 334 610 300 560 300 470 C 300 360 374 270 512 270 Z" fill="url(#rosto)"/>
+  <!-- manchas -->
+  <g clip-path="url(#cabeca)" fill="#2A2A2A">
+    <path d="M290 300 C 360 280 440 300 452 360 C 462 410 420 450 372 452 C 330 454 300 430 280 400 Z"/>
+    <path d="M640 280 C 690 300 740 330 740 380 C 700 392 662 372 650 340 C 642 318 636 300 640 280 Z"/>
+  </g>
+  <path d="M512 270 C 650 270 724 360 724 470 C 724 560 690 610 650 640 L 374 640 C 334 610 300 560 300 470 C 300 360 374 270 512 270 Z" fill="none" stroke="#2A2A2A" stroke-width="12"/>
+
+
+  <!-- topete (depois do contorno, para cair sobre a testa) -->
+  <path d="M458 310 C 446 268 486 244 512 268 C 538 244 578 268 566 310 C 548 296 532 306 512 296 C 492 306 476 296 458 310 Z" fill="#2A2A2A"/>
+
+  <!-- olhos -->
+  <ellipse cx="428" cy="474" rx="34" ry="40" fill="#1E1E1E"/>
+  <ellipse cx="596" cy="474" rx="34" ry="40" fill="#1E1E1E"/>
+  <circle cx="416" cy="458" r="13" fill="#FFFFFF"/>
+  <circle cx="584" cy="458" r="13" fill="#FFFFFF"/>
+  <circle cx="440" cy="490" r="6" fill="#FFFFFF" opacity="0.8"/>
+  <circle cx="608" cy="490" r="6" fill="#FFFFFF" opacity="0.8"/>
+
+  <!-- bochechas -->
+  <ellipse cx="364" cy="560" rx="38" ry="22" fill="#FF8FA8" opacity="0.55"/>
+  <ellipse cx="660" cy="560" rx="38" ry="22" fill="#FF8FA8" opacity="0.55"/>
+
+  <!-- focinho -->
+  <ellipse cx="512" cy="640" rx="180" ry="118" fill="url(#focinho)" stroke="#2A2A2A" stroke-width="12"/>
+  <ellipse cx="452" cy="628" rx="22" ry="32" fill="#B85A72" transform="rotate(-12 452 628)"/>
+  <ellipse cx="572" cy="628" rx="22" ry="32" fill="#B85A72" transform="rotate(12 572 628)"/>
+  <path d="M466 694 Q 512 726 558 694" fill="none" stroke="#2A2A2A" stroke-width="11" stroke-linecap="round"/>
+</g></svg>

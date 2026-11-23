@@ -49,6 +49,25 @@ router = APIRouter(prefix="/auth", tags=["autenticacao"])
 CABECALHO_CSRF = "X-CSRF-Token"
 
 
+def _so_modo_local() -> None:
+    """No AUTH_MODO=firebase, senha e sessao sao do Firebase: estas rotas somem.
+
+    404 em vez de 403 de proposito -- para o cliente, a rota simplesmente nao
+    existe nesta instalacao.
+    """
+    if settings.login_firebase:
+        raise HTTPException(status_code=404, detail="rota desativada: login pelo Firebase")
+
+
+_LOCAL = [Depends(_so_modo_local)]
+
+
+@router.get("/modo")
+def modo() -> dict[str, str]:
+    """Publico: diz ao app qual tela de login mostrar."""
+    return {"modo": settings.auth_modo}
+
+
 # --------------------------------------------------------------------- util
 def _gravar_cookies(resposta: Response, refresh: str, csrf: str) -> None:
     expira = settings.refresh_token_ttl_dias * 24 * 3600
@@ -119,7 +138,7 @@ def _resposta_de_token(db: Session, usuario: Usuario) -> TokenOut:
 
 
 # -------------------------------------------------------------------- login
-@router.post("/login", response_model=TokenOut)
+@router.post("/login", response_model=TokenOut, dependencies=_LOCAL)
 def login(
     payload: LoginIn,
     request: Request,
@@ -180,7 +199,7 @@ def login(
 
 
 # ------------------------------------------------------------------ refresh
-@router.post("/refresh", response_model=TokenOut)
+@router.post("/refresh", response_model=TokenOut, dependencies=_LOCAL)
 def refresh(
     request: Request,
     resposta: Response,
@@ -245,7 +264,7 @@ def refresh(
 
 
 # ------------------------------------------------------------------- logout
-@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT, dependencies=_LOCAL)
 def logout(request: Request, resposta: Response, db: Session = Depends(get_db)) -> None:
     """Encerra a sessao.
 
@@ -275,7 +294,7 @@ def logout(request: Request, resposta: Response, db: Session = Depends(get_db)) 
 
 # ----------------------------------------------------------------- eu / senha
 # ------------------------------------------------------- redefinicao de senha
-@router.post("/esqueci", status_code=status.HTTP_202_ACCEPTED)
+@router.post("/esqueci", status_code=status.HTTP_202_ACCEPTED, dependencies=_LOCAL)
 def esqueci_senha(
     payload: EsqueciSenhaIn,
     request: Request,
@@ -339,7 +358,7 @@ def esqueci_senha(
     return resposta_padrao
 
 
-@router.post("/redefinir", status_code=status.HTTP_204_NO_CONTENT)
+@router.post("/redefinir", status_code=status.HTTP_204_NO_CONTENT, dependencies=_LOCAL)
 def redefinir_senha(
     payload: RedefinirSenhaIn,
     request: Request,
@@ -401,7 +420,7 @@ def eu(usuario: Usuario = Depends(usuario_atual)) -> UsuarioOut:
     return UsuarioOut.model_validate(usuario, from_attributes=True)
 
 
-@router.post("/senha", status_code=status.HTTP_204_NO_CONTENT)
+@router.post("/senha", status_code=status.HTTP_204_NO_CONTENT, dependencies=_LOCAL)
 def trocar_senha(
     payload: TrocarSenhaIn,
     request: Request,

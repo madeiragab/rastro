@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Rastro</string>
+    <string name="title_activity_main">Rastro</string>
+    <string name="package_name">com.madeiragab.rastro</string>
+    <string name="custom_url_scheme">com.madeiragab.rastro</string>
+</resources>

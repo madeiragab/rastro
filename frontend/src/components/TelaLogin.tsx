@@ -1,5 +1,6 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { api, ErroApi } from "../api";
+import { firebaseAtivo } from "../firebase";
 import type { Usuario } from "../types";
 
 interface Props {
@@ -15,6 +16,23 @@ export function TelaLogin({ onEntrou }: Props) {
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
+  const [descompasso, setDescompasso] = useState<string | null>(null);
+
+  // App e API precisam concordar sobre quem cuida do login. Se discordarem,
+  // nenhuma senha funciona — melhor dizer o motivo do que "senha incorreta".
+  useEffect(() => {
+    api
+      .modoAuth()
+      .then(({ modo }) => {
+        const doApp = firebaseAtivo ? "firebase" : "local";
+        if (modo !== doApp) {
+          setDescompasso(
+            `Configuração incompatível: o servidor usa login "${modo}" e este app foi gerado para "${doApp}".`,
+          );
+        }
+      })
+      .catch(() => setDescompasso("Servidor fora do ar ou endereço da API errado neste build."));
+  }, []);
 
   async function entrar(evento: FormEvent) {
     evento.preventDefault();
@@ -49,7 +67,9 @@ export function TelaLogin({ onEntrou }: Props) {
       // essa neutralidade: dizer "e-mail não encontrado" aqui transformaria a
       // tela de login num verificador de cadastro.
       setAviso(
-        "Se houver conta com esse e-mail, o link de redefinição foi enviado. Ele vale por 30 minutos.",
+        firebaseAtivo
+          ? "Se houver conta com esse e-mail, o link de redefinição foi enviado. Confira também o spam."
+          : "Se houver conta com esse e-mail, o link de redefinição foi enviado. Ele vale por 30 minutos.",
       );
       setModo("entrar");
     } catch (falha) {
@@ -104,6 +124,11 @@ export function TelaLogin({ onEntrou }: Props) {
           </>
         )}
 
+        {descompasso && (
+          <div className="erro" style={{ margin: 0 }} role="alert">
+            {descompasso}
+          </div>
+        )}
         {erro && (
           <div className="erro" style={{ margin: 0 }} role="alert">
             {erro}

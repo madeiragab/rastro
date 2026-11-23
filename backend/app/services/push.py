@@ -28,7 +28,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import SessionLocal
-from app.models import Alerta, Animal, ConfiguracaoPush, InscricaoPush, Usuario, agora
+from app.config import settings
+from app.models import Alerta, Animal, ConfiguracaoPush, InscricaoPush, TokenFcm, Usuario, agora
 
 log = logging.getLogger("rastro.push")
 
@@ -114,6 +115,23 @@ def _enviar(config: ConfiguracaoPush, inscricao: InscricaoPush, carga: dict) -> 
         return False
 
 
+def _enviar_fcm(registro: TokenFcm, carga: dict) -> bool | None:
+    """True enviado, False falha temporaria, None token morto (descartar)."""
+    from app.security import firebase
+
+    # `data` do FCM so aceita string.
+    dados = {k: "" if v is None else str(v) for k, v in carga.items()}
+    try:
+        firebase.enviar_fcm(registro.token, carga["titulo"], carga["mensagem"], dados)
+        return True
+    except firebase.TokenFcmMorto:
+        log.info("token FCM %s descartado (app desinstalado ou token trocado)", registro.id)
+        return None
+    except Exception:  # noqa: BLE001 - o laco nao pode morrer por um envio
+        log.exception("falha ao enviar FCM para o token %s", registro.id)
+        return False
+
+
 def _carga_do_alerta(db: Session, alerta: Alerta) -> dict:
     animal = db.get(Animal, alerta.animal_id)
     return {
@@ -141,28 +159,36 @@ def despachar_pendentes(db: Session) -> int:
         return 0
 
     inscricoes = db.execute(select(InscricaoPush)).scalars().all()
+    # Sem Firebase configurado, token FCM guardado nao tem por onde sair.
+    tokens_fcm = (
+        db.execute(select(TokenFcm)).scalars().all() if settings.firebase_configurado else []
+    )
 
     # Marca antes de ter destinatario: sem inscricao nenhuma, o alerta nao pode
     # ficar pendente para sempre e ser despejado em massa quando alguem ativar
     # as notificacoes.
-    if not inscricoes:
+    if not inscricoes and not tokens_fcm:
         for alerta in pendentes:
             alerta.notificado_em = agora()
         db.commit()
         return 0
 
-    config = obter_chaves(db)
+    config = obter_chaves(db) if inscricoes else None
     enviados = 0
+    descartados: set[int] = set()
+
+    def _da_fazenda(usuario_id: int, fazenda_id: int | None) -> bool:
+        # Cada pessoa so recebe alerta da propria fazenda.
+        usuario = db.get(Usuario, usuario_id)
+        if usuario is None or not usuario.ativo:
+            return False
+        return fazenda_id is None or usuario.fazenda_id == fazenda_id
 
     for alerta in pendentes:
         carga = _carga_do_alerta(db, alerta)
 
         for inscricao in inscricoes:
-            # Cada pessoa so recebe alerta da propria fazenda.
-            usuario = db.get(Usuario, inscricao.usuario_id)
-            if usuario is None or not usuario.ativo:
-                continue
-            if carga["fazenda_id"] is not None and usuario.fazenda_id != carga["fazenda_id"]:
+            if not _da_fazenda(inscricao.usuario_id, carga["fazenda_id"]):
                 continue
 
             if _enviar(config, inscricao, carga):
@@ -173,6 +199,25 @@ def despachar_pendentes(db: Session) -> int:
                 inscricao.falhas += 1
                 if inscricao.falhas >= MAX_FALHAS:
                     db.delete(inscricao)
+
+        for registro in tokens_fcm:
+            if registro.id in descartados:
+                continue
+            if not _da_fazenda(registro.usuario_id, carga["fazenda_id"]):
+                continue
+            resultado = _enviar_fcm(registro, carga)
+            if resultado is True:
+                registro.ultimo_envio = agora()
+                registro.falhas = 0
+                enviados += 1
+            elif resultado is None:  # token morto: desinstalou o app
+                descartados.add(registro.id)
+                db.delete(registro)
+            else:
+                registro.falhas += 1
+                if registro.falhas >= MAX_FALHAS:
+                    descartados.add(registro.id)
+                    db.delete(registro)
 
         alerta.notificado_em = agora()
 
